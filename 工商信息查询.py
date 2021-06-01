@@ -43,9 +43,9 @@ async def index(request: Request, user_agent: Optional[str] = Header(None), x_to
         "info": {
             "openapi_url": "/api/v1/openapi.json",
             "ip": request.client.host,
-            "X-Token": x_token,
-            "UA": user_agent,
-            "headers": request.headers.items()
+            "x-token": x_token,
+            "user-agent": user_agent,
+            "headers": dict(request.headers)
         }
     }
     return JSONResponse(result)
@@ -106,8 +106,7 @@ async def get_proxy(**kwargs):
     #           "ys": "1", "cs": "1", "lb": "1", "sb": "0", "pb": "45", "mr": "2", "regions": "", "gm": "4"}
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4484.7 Safari/537.36",
-        # "X-Forwarded-For": "120.236.115.197",
-        # "X-Forwarded-For": "219.137.186.56",
+        # "X-Forwarded-For": "123.123.123.123",
     }
     try:
         async with aiohttp.ClientSession() as client:
