@@ -16,4 +16,5 @@ $ gunicorn -c gunicorn.py 工商信息查询:app
 docker 运行(工商信息查询.py 21行需要注释)
 
 $ docker build -t businessInfo .
+
 $ docker run --name businessInfo -d -p 8081:8081 businessInfo
