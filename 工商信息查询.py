@@ -62,9 +62,9 @@ async def api(data: Qcc, request: Request, background_tasks: BackgroundTasks, x_
               user_agent: Optional[str] = Header(None)):
     kwargs = data.dict()
     # print(data)
-    # proxy = ''
+    proxy = ''
     # proxy = await get_proxy()
-    proxy = 'http://127.0.0.1:1080'
+    # proxy = 'http://127.0.0.1:1080'
     kwargs["proxy"] = proxy if proxy else ""
     result = await qcc(**kwargs)
     result = await aqc(**kwargs) if not result else result
@@ -219,7 +219,7 @@ async def tqc_detail(**kwargs):
     url = f'https://m.tianyancha.com/company/{id}'
     headers = {
         "Referer": "https://m.tianyancha.com/search",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4484.7 Safari/537.36"
+        "User-Agent": generate_user_agent()
     }
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
@@ -229,8 +229,16 @@ async def tqc_detail(**kwargs):
                 if rs.status == 200:
                     html = await rs.text()
                     divs = etree.HTML(html).xpath('//div[@class="content"]/div[@class="divide-content"]/div')
-                    info = [x.xpath('div//text()') for x in divs]
+                    info = [x.xpath('div//text()') for x in divs] if divs else ""
                     data = {}
+                    if not info:
+                        time.sleep(randint(1, 2))
+                        retry = kwargs.get("retry", 0)
+                        retry += 1
+                        if retry >= 3:
+                            return None
+                        kwargs["retry"] = retry
+                        return await tqc_detail(**kwargs)
                     for x in info:
                         if "法定代表人" in x:
                             if len(x) == 2:
@@ -324,7 +332,9 @@ async def qcc(**kwargs):
                 if rs.status == 200:
                     html = await rs.text()
                     content = etree.HTML(html).xpath('//script[1]/text()')
-                    content = '{"appState' + content[0].split("appState")[1].split(";(function")[0] if content else ""
+                    content = '{"appState' + content[0].split("appState")[1].split(";(function")[
+                        0] if content else ""
+                    if not content: return None
                     result = json.loads(content)
                     result = result["search"]["searchRes"].get("Result", "") if result else ""
                     if not result:
@@ -382,7 +392,16 @@ async def qcc_detail(**kwargs):
                 if rs.status == 200:
                     html = await rs.text()
                     # print(html)
-                    table = etree.HTML(html).xpath('//table[@class="ntable"]')[0]
+                    table = etree.HTML(html).xpath('//table[@class="ntable"]')[0] if etree.HTML(html).xpath(
+                        '//table[@class="ntable"]') else ""
+                    if type(table) == str:
+                        time.sleep(randint(1, 2))
+                        retry = kwargs.get("retry", 0)
+                        retry += 1
+                        if retry >= 3:
+                            return False
+                        kwargs["retry"] = retry
+                        return await qcc_detail(**kwargs)
                     trs = table.xpath('tr')
                     tds = []
                     for x in trs:
@@ -453,8 +472,9 @@ async def aqc(**kwargs):
     }
     headers = {
         "User-Agent": generate_user_agent(),
-        "Cookie": "BD6D0; BDRCVFR[n9IS1zhFc9f]=mk3SLVN4HKm; delPer=0; H_PS_PSSID=31253_26350; BAIDUID_BFESS=052F271618C35B323E5A3EE30A92855F:FG=1; PSINO=7; Hm_lvt_ad52b306e1ae4557f5d3534cce8f8bbf=1621836200,1621934306; Hm_lpvt_ad52b306e1ae4557f5d3534cce8f8bbf=1621934320; ZX_UNIQ_UID=7da8713c563ea82758303b407e23815a; ab_sr=1.0.0_Y2FiNzBiOGZhOGNlNDE0MDIwY2UzN2I5NTgxMmY0ZThmZDVhYzE0ZTE0Y2Y1ZjJmNTFiYjU1Y2Y1YzNiYjUzYzgxZmMxNmY4MjBjZTA5ZTZiNGRkODc5MDFiMDBmZjIw; _s53_d91_=93c39820170a0a5e748e1ac9ecc79371df45a908d7031a5e0e6df033fcc8068df8a85a45f59cb9faa0f164dd33ed0c725ce0193064b26f78ee1fe0d9a4f2268afdacf18e692225844a44e79bd71a77f06f7e4596b88b0349e89e6b06a1578641c4c99befd9b0e7b25253cd16a5407825286ff581d6df283c4ae10dd20777111ae54f8098a7517df76b0a8f0565ca1ed04e4b8c9badc76492629f430223dcf523836a80fdb0bde7597942a188f03616047cec47f6f220f18e0bae8cf317754807970d2232d01d87c84aa94155409da9e3de623190cc2e96dff0bd7aa5898d09af; _y18_s21_=ca1d0606; __yjs_st=2_ODY4ZDU5MmIwNGJjYzgwMTcwYTE5ZGIyMzhlMDYxMGE3YjgzZGE3NWFjNTQzNDkyM2NjYTFiOGM1ZjNmNWE3ZDYzNjVkOTQ4NjE3MWQwNTIxOTk4NWYwMzhkNGMyMDMwZWRmYTc2N2FhZmNlMmUwYTgwMDI1ZTBhZDE2MTRkOWY1NjBhNmI5Mzg0YmE1OWUzODFhMTFmZTA5ZDFiNTk5M2U0NTMzMjU0MDNkMjM4NGEzNGQ2YWJhMzIzN2M1NDg2NGYwZmI2MGUyNTBjMDA2MTFjMGIwMTgyZTFmOWRhNjQ2NDA5YmExZTczZTgyZGU5MDgyNGZiNTE3MDdjNGE0MzJmZjBiOTNlZWRiZTcxMGQyMDM0NGExYWIzMjI1YjRlXzdfZTVhOGQ3Yzk=",
-        "Referer": f'https://aiqicha.baidu.com/s?q={key}&t=0'
+        "Cookie": "",
+        # "Cookie": "__yjs_st=2_MmMwMTY0YjJkNmI0ZmU1MjllZGU0NTA4ZThmMWI0ZmRjYjUxMmIyZWFmMTRmM2Q1ZTQwMjZjYmY2YmNiMGY0ZmU0NDFjOWM1M2FiNTA1MGRiOTFkMmM4OTczZjQzMzUxZTc2ZjViZmYwYjRmYjhhZGYxYzY2N2YzZTk1MTZmZTg1OTNiZmQ4OTQ3NTNmZTkxZDAwNmVmYzhjNmJmNmMyNTJmY2IxYmJkMTc2NDA3OTVjNGIyYjkyZDQxMWM3YzgwZmQ2ZTQ5MzdjMmI0NjViNmI2MDIxZDA2ODA2ODI0MmQ0YWJlMTkxMTc5NDQyZGQ5YTJkZDI2ZWYxZGE3N2NiZF83X2FkZGY1ZWUw;",
+        "Referer": 'https://aiqicha.baidu.com/'
     }
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
@@ -466,7 +486,7 @@ async def aqc(**kwargs):
                     html = await rs.text()
                     content = etree.HTML(html).xpath('//script[1]/text()')
                     if content:
-                        result = '{"sid"' + content[0].split('{"sid"')[1].split(";")[0]
+                        result = '{"sid"' + content[0].split('{"sid"')[1].split(";\n")[0]
                         # print(result)
                         result = json.loads(result)
                         data_list = []
@@ -507,7 +527,8 @@ async def aqc_detail(**kwargs):
     }
     headers = {
         "User-Agent": generate_user_agent(),
-        "Cookie": "BD6D0; BDRCVFR[n9IS1zhFc9f]=mk3SLVN4HKm; delPer=0; H_PS_PSSID=31253_26350; BAIDUID_BFESS=052F271618C35B323E5A3EE30A92855F:FG=1; PSINO=7; Hm_lvt_ad52b306e1ae4557f5d3534cce8f8bbf=1621836200,1621934306; Hm_lpvt_ad52b306e1ae4557f5d3534cce8f8bbf=1621934320; ZX_UNIQ_UID=7da8713c563ea82758303b407e23815a; ab_sr=1.0.0_Y2FiNzBiOGZhOGNlNDE0MDIwY2UzN2I5NTgxMmY0ZThmZDVhYzE0ZTE0Y2Y1ZjJmNTFiYjU1Y2Y1YzNiYjUzYzgxZmMxNmY4MjBjZTA5ZTZiNGRkODc5MDFiMDBmZjIw; _s53_d91_=93c39820170a0a5e748e1ac9ecc79371df45a908d7031a5e0e6df033fcc8068df8a85a45f59cb9faa0f164dd33ed0c725ce0193064b26f78ee1fe0d9a4f2268afdacf18e692225844a44e79bd71a77f06f7e4596b88b0349e89e6b06a1578641c4c99befd9b0e7b25253cd16a5407825286ff581d6df283c4ae10dd20777111ae54f8098a7517df76b0a8f0565ca1ed04e4b8c9badc76492629f430223dcf523836a80fdb0bde7597942a188f03616047cec47f6f220f18e0bae8cf317754807970d2232d01d87c84aa94155409da9e3de623190cc2e96dff0bd7aa5898d09af; _y18_s21_=ca1d0606; __yjs_st=2_ODY4ZDU5MmIwNGJjYzgwMTcwYTE5ZGIyMzhlMDYxMGE3YjgzZGE3NWFjNTQzNDkyM2NjYTFiOGM1ZjNmNWE3ZDYzNjVkOTQ4NjE3MWQwNTIxOTk4NWYwMzhkNGMyMDMwZWRmYTc2N2FhZmNlMmUwYTgwMDI1ZTBhZDE2MTRkOWY1NjBhNmI5Mzg0YmE1OWUzODFhMTFmZTA5ZDFiNTk5M2U0NTMzMjU0MDNkMjM4NGEzNGQ2YWJhMzIzN2M1NDg2NGYwZmI2MGUyNTBjMDA2MTFjMGIwMTgyZTFmOWRhNjQ2NDA5YmExZTczZTgyZGU5MDgyNGZiNTE3MDdjNGE0MzJmZjBiOTNlZWRiZTcxMGQyMDM0NGExYWIzMjI1YjRlXzdfZTVhOGQ3Yzk=",
+        "Cookie": "",
+        # "Cookie": "__yjs_st=2_MmMwMTY0YjJkNmI0ZmU1MjllZGU0NTA4ZThmMWI0ZmRjYjUxMmIyZWFmMTRmM2Q1ZTQwMjZjYmY2YmNiMGY0ZmU0NDFjOWM1M2FiNTA1MGRiOTFkMmM4OTczZjQzMzUxZTc2ZjViZmYwYjRmYjhhZGYxYzY2N2YzZTk1MTZmZTg1OTNiZmQ4OTQ3NTNmZTkxZDAwNmVmYzhjNmJmNmMyNTJmY2IxYmJkMTc2NDA3OTVjNGIyYjkyZDQxMWM3YzgwZmQ2ZTQ5MzdjMmI0NjViNmI2MDIxZDA2ODA2ODI0MmQ0YWJlMTkxMTc5NDQyZGQ5YTJkZDI2ZWYxZGE3N2NiZF83X2FkZGY1ZWUw;",
         "Referer": f'https://aiqicha.baidu.com/company_detail_{data["pid"]}',
         "X-Requested-With": "XMLHttpRequest",
         "Zx-Open-Url": f'https://aiqicha.baidu.com/company_detail_{data["pid"]}'
@@ -520,7 +541,15 @@ async def aqc_detail(**kwargs):
                                       timeout=set_timeout) as rs:
                 if rs.status == 200:
                     result = json.loads(await rs.text())
-                    result = result["data"]["basicData"]
+                    result = result["data"]["basicData"] if result.get("data", "") else ""
+                    if not result:
+                        time.sleep(randint(1, 2))
+                        retry = kwargs.get("retry", 0)
+                        retry += 1
+                        if retry >= 3:
+                            return None
+                        kwargs["retry"] = retry
+                        return await aqc_detail(**kwargs)
                     province = f'{result["district"].split("省")[0]}省' if "省" in result[
                         "district"] else f'{result["district"].split("市")[0]}市'
                     result = {
@@ -718,14 +747,15 @@ if __name__ == '__main__':
     # import uvicorn
     # uvicorn.run(app)
     proxy = 'http://127.0.0.1:1080'
+    proxy = ''
     # rs = asyncio.get_event_loop().run_until_complete(test())
     # proxy = asyncio.get_event_loop().run_until_complete(get_proxy())
     # print(proxy)
-    rs = asyncio.get_event_loop().run_until_complete(tyc(**{"key": "特变电工湖南工程有限公司", "proxy": proxy}))
-    # rs = asyncio.get_event_loop().run_until_complete(qcc(**{"key": "特变电工湖南工程有限公司", "proxy": proxy}))
+    # rs = asyncio.get_event_loop().run_until_complete(tyc(**{"key": "携众集团", "proxy": proxy}))
+    rs = asyncio.get_event_loop().run_until_complete(qcc(**{"key": "携众集团", "proxy": proxy}))
     # rs = asyncio.get_event_loop().run_until_complete(
     #     qcc_detail(**{"url": "https://www.qcc.com/firm/963f4179841540334d3a16db3fc3567d.html"}))
-    # rs = asyncio.get_event_loop().run_until_complete(aqc(**{"key": "哔哩哔哩"}))
+    # rs = asyncio.get_event_loop().run_until_complete(aqc(**{"key": "携众集团", "proxy": proxy}))
     # rs = asyncio.get_event_loop().run_until_complete(aqc_detail(**{"data": {"pid": "43880125442188"}}))
     # rs = asyncio.get_event_loop().run_until_complete(gsxt(**{"key": "上海宽娱数码科技有限公司"}))
     # pripid = "D1FDF711DFE03EE312CC2ACD3CE218AB448EC78EC78E61ABE228E2ABE2ABE2ABEEABE2ABDF960DC782CB82C7647C-1618992356543"
