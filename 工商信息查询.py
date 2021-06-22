@@ -188,7 +188,7 @@ async def tyc(**kwargs):
                     html = await rs.text()
                     ids = etree.HTML(html).xpath('//div[@class="search-company-item"]/@onclick')
                     if not ids: return None
-                    ids = [eval(x.strip("jumpToCompany")) for x in ids]
+                    ids = [x.strip("jumpToCompany('").strip("');") for x in ids]
                     tasks = [asyncio.create_task(tqc_detail(**{"id": ids[i]})) for i in range(len(ids))]
                     result = await asyncio.gather(*tasks)
                     return [x for x in result if x]
@@ -403,11 +403,12 @@ async def qcc_detail(**kwargs):
                         kwargs["retry"] = retry
                         return await qcc_detail(**kwargs)
                     trs = table.xpath('tr')
+                    if not trs: return False
                     tds = []
                     for x in trs:
                         tds += x.xpath('td[@class="tb"]')
                     info = {x.xpath('text()')[0].strip(): x.xpath('following-sibling::node()/text()')[0].strip() for x
-                            in tds}
+                            in tds if x.xpath('following-sibling::node()/text()')}
                     result = {
                         "social_credit_code": info.get("统一社会信用代码", ""),
                         "name_cn": info.get("企业名称", ""),
@@ -421,7 +422,7 @@ async def qcc_detail(**kwargs):
                         "regist_code": info.get("工商注册号", ""),
                         "taxpayer_code": info.get("纳税人识别号", ""),
                         "type": info.get("企业类型", ""),
-                        "license_start_date": info.get("营业期限", ""),
+                        "license_start_date": info.get("营业期限", "").strip(),
                         "taxpayer_crop": info.get("纳税人资质", ""),
                         "industry_involved": info.get("所属行业", ""),
                         "province": info.get("所属地区", ""),
@@ -435,8 +436,9 @@ async def qcc_detail(**kwargs):
                         "business_scope": info.get("经营范围", ""),
                     }
                     if result.get("license_start_date", ""):
-                        result["license_start_date"], result["license_end_date"] = result["license_start_date"].split(
-                            "至")
+                        result["license_start_date"], result["license_end_date"] = (x.strip() for x in
+                                                                                    result["license_start_date"].split(
+                                                                                        "至"))
                     else:
                         result["license_start_date"], result["license_end_date"] = "", ""
                     result["legal_person"] = data["legal_person"]
@@ -580,7 +582,8 @@ async def aqc_detail(**kwargs):
                         "fax": "",
                         "website": result["website"],
                         "regist_address": result["regAddr"],
-                        "transformer_name": result["prevEntName"],
+                        "transformer_name": result["prevEntName"][0] if type(result["prevEntName"]) == list else result[
+                            "prevEntName"],
                         "status": result["openStatus"],
                     }
                     # print(result)
@@ -747,15 +750,16 @@ if __name__ == '__main__':
     # import uvicorn
     # uvicorn.run(app)
     proxy = 'http://127.0.0.1:1080'
-    proxy = ''
+    # proxy = ''
     # rs = asyncio.get_event_loop().run_until_complete(test())
     # proxy = asyncio.get_event_loop().run_until_complete(get_proxy())
     # print(proxy)
-    # rs = asyncio.get_event_loop().run_until_complete(tyc(**{"key": "携众集团", "proxy": proxy}))
+    # rs = asyncio.get_event_loop().run_until_complete(tyc(**{"key": "华为终端(深圳)有限公司", "proxy": proxy}))
+    # rs = asyncio.get_event_loop().run_until_complete(qcc(**{"key": "华为终端(深圳)有限公司", "proxy": proxy}))
     rs = asyncio.get_event_loop().run_until_complete(qcc(**{"key": "携众集团", "proxy": proxy}))
     # rs = asyncio.get_event_loop().run_until_complete(
     #     qcc_detail(**{"url": "https://www.qcc.com/firm/963f4179841540334d3a16db3fc3567d.html"}))
-    # rs = asyncio.get_event_loop().run_until_complete(aqc(**{"key": "携众集团", "proxy": proxy}))
+    # rs = asyncio.get_event_loop().run_until_complete(aqc(**{"key": "华为终端(深圳)有限公司", "proxy": proxy}))
     # rs = asyncio.get_event_loop().run_until_complete(aqc_detail(**{"data": {"pid": "43880125442188"}}))
     # rs = asyncio.get_event_loop().run_until_complete(gsxt(**{"key": "上海宽娱数码科技有限公司"}))
     # pripid = "D1FDF711DFE03EE312CC2ACD3CE218AB448EC78EC78E61ABE228E2ABE2ABE2ABEEABE2ABDF960DC782CB82C7647C-1618992356543"
