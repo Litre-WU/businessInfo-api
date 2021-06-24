@@ -18,7 +18,7 @@ import time
 from random import randint
 
 # windows系统需要
-asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+# asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 tags_metadata = [
     {
@@ -228,6 +228,7 @@ async def tqc_detail(**kwargs):
             async with client.request(method="GET", proxy=proxy, url=url, headers=headers, timeout=set_timeout) as rs:
                 if rs.status == 200:
                     html = await rs.text()
+                    # print(html)
                     divs = etree.HTML(html).xpath('//div[@class="content"]/div[@class="divide-content"]/div')
                     info = [x.xpath('div//text()') for x in divs] if divs else ""
                     data = {}
@@ -255,7 +256,7 @@ async def tqc_detail(**kwargs):
                                 data[x[0]] = x[1]
                     result = {
                         "social_credit_code": data.get("统一社会信用代码", ""),
-                        "name_cn": etree.HTML(html).xpath('//head/title/text()')[0].split("_")[0],
+                        "name_cn": etree.HTML(html).xpath('//head/title/text()')[0].split("_")[0].split()[0],
                         "legal_person": data.get("法定代表人", ""),
                         "status": data.get("经营状态", ""),
                         "found_date": data.get("成立日期", ""),
@@ -749,14 +750,14 @@ async def test():
 if __name__ == '__main__':
     # import uvicorn
     # uvicorn.run(app)
-    proxy = 'http://127.0.0.1:1080'
-    # proxy = ''
+    # proxy = 'http://127.0.0.1:1080'
+    proxy = ''
     # rs = asyncio.get_event_loop().run_until_complete(test())
     # proxy = asyncio.get_event_loop().run_until_complete(get_proxy())
     # print(proxy)
-    # rs = asyncio.get_event_loop().run_until_complete(tyc(**{"key": "华为终端(深圳)有限公司", "proxy": proxy}))
+    rs = asyncio.get_event_loop().run_until_complete(tyc(**{"key": "人民日报传媒广告有限公司", "proxy": proxy}))
     # rs = asyncio.get_event_loop().run_until_complete(qcc(**{"key": "华为终端(深圳)有限公司", "proxy": proxy}))
-    rs = asyncio.get_event_loop().run_until_complete(qcc(**{"key": "携众集团", "proxy": proxy}))
+    # rs = asyncio.get_event_loop().run_until_complete(qcc(**{"key": "携众集团", "proxy": proxy}))
     # rs = asyncio.get_event_loop().run_until_complete(
     #     qcc_detail(**{"url": "https://www.qcc.com/firm/963f4179841540334d3a16db3fc3567d.html"}))
     # rs = asyncio.get_event_loop().run_until_complete(aqc(**{"key": "华为终端(深圳)有限公司", "proxy": proxy}))
