@@ -15,10 +15,10 @@ from user_agent import generate_user_agent
 from lxml import etree
 import json
 import time
-from random import randint
+from random import randint, sample
 
 # windows系统需要
-# asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 tags_metadata = [
     {
@@ -61,19 +61,13 @@ class Qcc(BaseModel):
 async def api(data: Qcc, request: Request, background_tasks: BackgroundTasks, x_token: List[str] = Header(None),
               user_agent: Optional[str] = Header(None)):
     kwargs = data.dict()
-    # print(data)
-    proxy = ''
-    # proxy = await get_proxy()
-    # proxy = 'http://127.0.0.1:1080'
-    kwargs["proxy"] = proxy if proxy else ""
-    result = await qcc(**kwargs)
-    result = await aqc(**kwargs) if not result else result
-    result = await tyc(**kwargs) if not result else result
-    result = await gsxt(**kwargs) if not result else result
-    if result:
-        result = {"code": 200, "msg": "OK", "result": result}
+    # 设置第三方代理
+    proxy = await get_proxy()
+    if proxy:
+        kwargs = kwargs | {"proxy": f'http://{proxy[0]["ip"]}:{proxy[0]["port"]}'}
     else:
-        result = {"code": 200, "msg": "Fail", "result": result}
+        kwargs = kwargs | {"proxy": ""}
+    result = await query(**kwargs)
     return JSONResponse(result)
 
 
@@ -83,29 +77,22 @@ set_timeout = 5
 
 # 代理
 async def get_proxy(**kwargs):
-    # 番茄代理
-    url = 'http://x.fanqieip.com/gip'
-    params = {
-        "getType": "3",
-        "qty": "1",
-        "port": "1",
-        "time": "1",
-        "city": "0",
-        "format": "2",
-        "ss": "1",
-        "dt": "1",
-        "css": ""
-    }
+    if not kwargs.get("turn", 0):
+        time_now = int(time.time())
+        with open('proxy.json', 'r') as f:
+            data = json.load(f)
+            expire_time = int(time.mktime(time.strptime(data[0]["expire_time"], "%Y-%m-%d %H:%M:%S")))
+            if time_now < expire_time:
+                return data
+    # # 番茄代理
+    # url = 'http://x.fanqieip.com/gip'
+    # params = {"getType": "3","qty": "1","port": "1","time": "1","city": "0","format": "2","ss": "1","dt": "1","css": ""}
     # 芝麻代理
     url = 'http://webapi.http.zhimacangku.com/getip'
     params = {"num": "1", "type": "2", "pro": "0", "city": "0", "yys": "0", "port": "1", "time": "1", "ts": "1",
-              "ys": "1", "cs": "1", "lb": "1", "sb": "0", "pb": "45", "mr": "2", "regions": ""
-              }
-    # url = 'http://http.tiqu.letecs.com/getip3'
-    # params = {"num": "1", "type": "2", "pro": "0", "city": "0", "yys": "0", "port": "1", "time": "1", "ts": "1",
-    #           "ys": "1", "cs": "1", "lb": "1", "sb": "0", "pb": "45", "mr": "2", "regions": "", "gm": "4"}
+              "ys": "0", "cs": "0", "lb": "1", "sb": "0", "pb": "4", "mr": "1", "regions": ""}
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4484.7 Safari/537.36",
+        "User-Agent": generate_user_agent(),
         # "X-Forwarded-For": "123.123.123.123",
     }
     try:
@@ -114,12 +101,20 @@ async def get_proxy(**kwargs):
                                       timeout=set_timeout) as rs:
                 if rs.status == 200:
                     result = await rs.text()
-                    # print(result)
                     result = json.loads(result)
-                    proxy = f'http://{result["data"][0]["ip"]}:{result["data"][0]["port"]}'
-                    return proxy
+                    if result.get("data", ""):
+                        with open('proxy.json', 'w') as f:
+                            json.dump(result["data"], f)
+                        return result["data"]
+                    else:
+                        time.sleep(randint(0, 1))
+                        retry = kwargs.get("retry", 0)
+                        retry += 1
+                        if retry >= 2:
+                            return None
+                        kwargs["retry"] = retry
+                        return await get_proxy(**kwargs)
                 else:
-                    time.sleep(randint(1, 2))
                     retry = kwargs.get("retry", 0)
                     retry += 1
                     if retry >= 2:
@@ -128,7 +123,6 @@ async def get_proxy(**kwargs):
                     return await get_proxy(**kwargs)
     except Exception as e:
         print(e)
-        time.sleep(randint(1, 2))
         retry = kwargs.get("retry", 0)
         retry += 1
         if retry >= 2:
@@ -145,11 +139,15 @@ async def query_ip(**kwargs):
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
                                          connector=aiohttp.TCPConnector(ssl=False),
                                          trust_env=True) as client:
-            async with client.request(method="GET", url=url, proxy=proxy, timeout=set_timeout) as rs:
+            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
+            async with client.request(method="GET", url=url, proxy=proxy, proxy_auth=proxy_auth,
+                                      timeout=set_timeout) as rs:
                 if rs.status == 200:
                     result = await rs.json()
+                    print(result)
                     ip = result["origin"].split()[0]
                     return ip
+                # print(await rs.text())
                 time.sleep(randint(1, 2))
                 retry = kwargs.get("retry", 0)
                 retry += 1
@@ -168,6 +166,29 @@ async def query_ip(**kwargs):
         return await query_ip(**kwargs)
 
 
+# 查询
+async def query(**kwargs):
+    result = await qcc(**kwargs)
+    result = await tyc(**kwargs) if not result else result
+    result = await aqc(**kwargs) if not result else result
+    result = await gsxt(**kwargs) if not result else result
+    if result:
+        result = {"code": 200, "msg": "OK", "result": result}
+    else:
+        retry = kwargs.get("retry", 0)
+        retry += 1
+        if retry >= 2:
+            return {"code": 200, "msg": "Fail", "result": None}
+        kwargs["retry"] = retry
+        proxy = await get_proxy(**{"turn": 1})
+        if proxy:
+            kwargs = kwargs | {"proxy": f'http://{proxy[0]["ip"]}:{proxy[0]["port"]}'}
+        else:
+            kwargs = kwargs | {"proxy": ""}
+        return await query(**kwargs)
+    return result
+
+
 # 天眼查
 async def tyc(**kwargs):
     proxy = kwargs.get("proxy", "")
@@ -182,30 +203,30 @@ async def tyc(**kwargs):
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
                                          connector=aiohttp.TCPConnector(ssl=False),
                                          trust_env=True) as client:
-            async with client.request(method="GET", proxy=proxy, url=url, params=params, headers=headers,
+            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
+            async with client.request(method="GET", proxy=proxy, proxy_auth=proxy_auth, url=url, params=params,
+                                      headers=headers,
                                       timeout=set_timeout) as rs:
                 if rs.status == 200:
                     html = await rs.text()
                     ids = etree.HTML(html).xpath('//div[@class="search-company-item"]/@onclick')
                     if not ids: return None
                     ids = [x.strip("jumpToCompany('").strip("');") for x in ids]
-                    tasks = [asyncio.create_task(tqc_detail(**{"id": ids[i]})) for i in range(len(ids))]
+                    tasks = [asyncio.create_task(tqc_detail(**{"id": ids[i], "proxy": proxy})) for i in range(len(ids))]
                     result = await asyncio.gather(*tasks)
                     return [x for x in result if x]
                 else:
-                    time.sleep(randint(1, 2))
                     retry = kwargs.get("retry", 0)
                     retry += 1
-                    if retry >= 3:
+                    if retry >= 2:
                         return None
                     kwargs["retry"] = retry
                     return await tyc(**kwargs)
     except Exception as e:
         print('tyc', e)
-        time.sleep(randint(1, 2))
         retry = kwargs.get("retry", 0)
         retry += 1
-        if retry >= 3:
+        if retry >= 2:
             return None
         kwargs["retry"] = retry
         return await tyc(**kwargs)
@@ -225,7 +246,9 @@ async def tqc_detail(**kwargs):
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
                                          connector=aiohttp.TCPConnector(ssl=False),
                                          trust_env=True) as client:
-            async with client.request(method="GET", proxy=proxy, url=url, headers=headers, timeout=set_timeout) as rs:
+            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
+            async with client.request(method="GET", proxy=proxy, proxy_auth=proxy_auth, url=url, headers=headers,
+                                      timeout=set_timeout) as rs:
                 if rs.status == 200:
                     html = await rs.text()
                     # print(html)
@@ -233,10 +256,9 @@ async def tqc_detail(**kwargs):
                     info = [x.xpath('div//text()') for x in divs] if divs else ""
                     data = {}
                     if not info:
-                        time.sleep(randint(1, 2))
                         retry = kwargs.get("retry", 0)
                         retry += 1
-                        if retry >= 3:
+                        if retry >= 2:
                             return None
                         kwargs["retry"] = retry
                         return await tqc_detail(**kwargs)
@@ -301,10 +323,9 @@ async def tqc_detail(**kwargs):
                     return await tqc_detail(**kwargs)
     except Exception as e:
         print('tyc_detail', e)
-        time.sleep(randint(1, 2))
         retry = kwargs.get("retry", 0)
         retry += 1
-        if retry >= 3:
+        if retry >= 2:
             return None
         kwargs["retry"] = retry
         return await tqc_detail(**kwargs)
@@ -328,7 +349,9 @@ async def qcc(**kwargs):
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
                                          connector=aiohttp.TCPConnector(ssl=False),
                                          trust_env=True) as client:
-            async with client.request(method="GET", proxy=proxy, url=url, params=params, headers=headers,
+            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
+            async with client.request(method="GET", proxy=proxy, proxy_auth=proxy_auth, url=url, params=params,
+                                      headers=headers,
                                       timeout=set_timeout) as rs:
                 if rs.status == 200:
                     html = await rs.text()
@@ -355,19 +378,17 @@ async def qcc(**kwargs):
                     result = await asyncio.gather(*tasks)
                     return [x for x in result if x]
                 else:
-                    time.sleep(randint(1, 2))
                     retry = kwargs.get("retry", 0)
                     retry += 1
-                    if retry >= 3:
+                    if retry >= 2:
                         return None
                     kwargs["retry"] = retry
                     return await qcc(**kwargs)
     except Exception as e:
         print('qcc', e)
-        time.sleep(randint(1, 2))
         retry = kwargs.get("retry", 0)
         retry += 1
-        if retry >= 3:
+        if retry >= 2:
             return None
         kwargs["retry"] = retry
         return await qcc(**kwargs)
@@ -389,17 +410,18 @@ async def qcc_detail(**kwargs):
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
                                          connector=aiohttp.TCPConnector(ssl=False),
                                          trust_env=True) as client:
-            async with client.request(method="GET", proxy=proxy, url=url, headers=headers, timeout=set_timeout) as rs:
+            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
+            async with client.request(method="GET", proxy=proxy, proxy_auth=proxy_auth, url=url, headers=headers,
+                                      timeout=set_timeout) as rs:
                 if rs.status == 200:
                     html = await rs.text()
                     # print(html)
                     table = etree.HTML(html).xpath('//table[@class="ntable"]')[0] if etree.HTML(html).xpath(
                         '//table[@class="ntable"]') else ""
                     if type(table) == str:
-                        time.sleep(randint(1, 2))
                         retry = kwargs.get("retry", 0)
                         retry += 1
-                        if retry >= 3:
+                        if retry >= 2:
                             return False
                         kwargs["retry"] = retry
                         return await qcc_detail(**kwargs)
@@ -445,19 +467,17 @@ async def qcc_detail(**kwargs):
                     result["legal_person"] = data["legal_person"]
                     return {**data, **result}
                 else:
-                    time.sleep(randint(1, 2))
                     retry = kwargs.get("retry", 0)
                     retry += 1
-                    if retry >= 3:
+                    if retry >= 2:
                         return None
                     kwargs["retry"] = retry
                     return await qcc_detail(**kwargs)
     except Exception as e:
         print('qcc_detail', e)
-        time.sleep(randint(1, 2))
         retry = kwargs.get("retry", 0)
         retry += 1
-        if retry >= 3:
+        if retry >= 2:
             return None
         kwargs["retry"] = retry
         return await qcc_detail(**kwargs)
@@ -483,7 +503,9 @@ async def aqc(**kwargs):
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
                                          connector=aiohttp.TCPConnector(ssl=False),
                                          trust_env=True) as client:
-            async with client.request(method="GET", proxy=proxy, url=url, params=params, headers=headers,
+            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
+            async with client.request(method="GET", proxy=proxy, proxy_auth=proxy_auth, url=url, params=params,
+                                      headers=headers,
                                       timeout=set_timeout) as rs:
                 if rs.status == 200:
                     html = await rs.text()
@@ -502,19 +524,17 @@ async def aqc(**kwargs):
                         result = await asyncio.gather(*tasks)
                         return [x for x in result if x]
                 else:
-                    time.sleep(randint(1, 2))
                     retry = kwargs.get("retry", 0)
                     retry += 1
-                    if retry >= 3:
+                    if retry >= 2:
                         return None
                     kwargs["retry"] = retry
                     return await aqc(**kwargs)
     except Exception as e:
         print('aqc', e)
-        time.sleep(randint(1, 2))
         retry = kwargs.get("retry", 0)
         retry += 1
-        if retry >= 3:
+        if retry >= 2:
             return None
         kwargs["retry"] = retry
         return await aqc(**kwargs)
@@ -540,69 +560,67 @@ async def aqc_detail(**kwargs):
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
                                          connector=aiohttp.TCPConnector(ssl=False),
                                          trust_env=True) as client:
-            async with client.request(method="GET", proxy=proxy, url=url, params=params, headers=headers,
+            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
+            async with client.request(method="GET", proxy=proxy, proxy_auth=proxy_auth, url=url, params=params,
+                                      headers=headers,
                                       timeout=set_timeout) as rs:
                 if rs.status == 200:
                     result = json.loads(await rs.text())
                     result = result["data"]["basicData"] if result.get("data", "") else ""
                     if not result:
-                        time.sleep(randint(1, 2))
                         retry = kwargs.get("retry", 0)
                         retry += 1
-                        if retry >= 3:
+                        if retry >= 2:
                             return None
                         kwargs["retry"] = retry
                         return await aqc_detail(**kwargs)
-                    province = f'{result["district"].split("省")[0]}省' if "省" in result[
-                        "district"] else f'{result["district"].split("市")[0]}市'
+                    province = f'{result["district"].split("省")[0]}省' if "省" in result.get(
+                        "district", "") else f'{result.get("district", "").split("市")[0]}市'
                     result = {
-                        "name_cn": result["entName"],
+                        "name_cn": result.get("entName", ""),
                         "name_en": "",
-                        "legal_person": result["legalPerson"],
-                        "registered_capital": result["regCapital"],
-                        "really_capital": result["realCapital"],
-                        "found_date": result["startDate"],
-                        "issue_date": result["annualDate"],
-                        "social_credit_code": result["unifiedCode"],
-                        "organization_code": result["orgNo"],
+                        "legal_person": result.get("legalPerson", ""),
+                        "registered_capital": result.get("regCapital", ""),
+                        "really_capital": result.get("realCapital", ""),
+                        "found_date": result.get("startDate", ""),
+                        "issue_date": result.get("annualDate", ""),
+                        "social_credit_code": result.get("unifiedCode", ""),
+                        "organization_code": result.get("orgNo", ""),
                         "regist_code": result.get("licenseNumber", ""),
-                        "taxpayer_code": result["regNo"],
+                        "taxpayer_code": result.get("regNo", ""),
                         "imp_exp_enterprise_code": "",
-                        "industry_involved": result["industry"],
-                        "type": result["entType"],
-                        "license_start_date": result["startDate"],
-                        "license_end_date": result["openTime"].split("至")[-1].strip(),
-                        "regist_office": result["authority"],
+                        "industry_involved": result.get("industry", ""),
+                        "type": result.get("entType", ""),
+                        "license_start_date": result.get("startDate", ""),
+                        "license_end_date": result.get("openTime", "").split("至")[-1].strip(),
+                        "regist_office": result.get("authority", ""),
                         "staff_size": "",
                         "insured_size": "",
                         "province": province,
-                        "address": result["addr"],
-                        "business_scope": result["scope"],
-                        "email": result["email"],
-                        "unit_phone": result["telephone"],
+                        "address": result.get("addr", ""),
+                        "business_scope": result.get("scope", ""),
+                        "email": result.get("email", ""),
+                        "unit_phone": result.get("telephone", ""),
                         "fax": "",
-                        "website": result["website"],
-                        "regist_address": result["regAddr"],
-                        "transformer_name": result["prevEntName"][0] if type(result["prevEntName"]) == list else result[
-                            "prevEntName"],
-                        "status": result["openStatus"],
+                        "website": result.get("website", ""),
+                        "regist_address": result.get("regAddr", ""),
+                        "transformer_name": result["prevEntName"][0] if type(result.get("prevEntName", "")) == list else
+                        result.get("prevEntName", ""),
+                        "status": result.get("openStatus", ""),
                     }
-                    # print(result)
                     return result
                 else:
-                    time.sleep(randint(1, 2))
                     retry = kwargs.get("retry", 0)
                     retry += 1
-                    if retry >= 3:
+                    if retry >= 2:
                         return None
                     kwargs["retry"] = retry
                     return await aqc_detail(**kwargs)
     except Exception as e:
-        print("qcc_detail", e)
-        time.sleep(randint(1, 2))
+        print("aqc_detail", e)
         retry = kwargs.get("retry", 0)
         retry += 1
-        if retry >= 3:
+        if retry >= 2:
             return None
         kwargs["retry"] = retry
         return await aqc_detail(**kwargs)
@@ -627,7 +645,9 @@ async def gsxt(**kwargs):
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
                                          connector=aiohttp.TCPConnector(ssl=False),
                                          trust_env=True) as client:
-            async with client.request(method="POST", proxy=proxy, url=url, data=data, headers=headers,
+            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
+            async with client.request(method="POST", proxy=proxy, proxy_auth=proxy_auth, url=url, data=data,
+                                      headers=headers,
                                       timeout=10) as rs:
                 if rs.status == 200:
                     result = await rs.text()
@@ -644,19 +664,17 @@ async def gsxt(**kwargs):
                         result = await asyncio.gather(*tasks)
                         return [x for x in result if x]
                 else:
-                    time.sleep(randint(1, 2))
                     retry = kwargs.get("retry", 0)
                     retry += 1
-                    if retry >= 3:
+                    if retry >= 2:
                         return None
                     kwargs["retry"] = retry
                     return await gsxt(**kwargs)
     except Exception as e:
         print('gsxt', e)
-        time.sleep(randint(1, 2))
         retry = kwargs.get("retry", 0)
         retry += 1
-        if retry >= 3:
+        if retry >= 2:
             return None
         kwargs["retry"] = retry
         return await gsxt(**kwargs)
@@ -680,7 +698,9 @@ async def gsxt_detail(**kwargs):
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
                                          connector=aiohttp.TCPConnector(ssl=False),
                                          trust_env=True) as client:
-            async with client.request(method='POST', proxy=proxy, url=url, params=params, headers=headers,
+            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
+            async with client.request(method='POST', proxy=proxy, proxy_auth=proxy_auth, url=url, params=params,
+                                      headers=headers,
                                       timeout=10) as rs:
                 if rs.status == 200:
                     result = await rs.text()
@@ -719,19 +739,17 @@ async def gsxt_detail(**kwargs):
                         }
                         return result
                 else:
-                    time.sleep(randint(1, 2))
                     retry = kwargs.get("retry", 0)
                     retry += 1
-                    if retry >= 3:
+                    if retry >= 2:
                         return None
                     kwargs["retry"] = retry
                     return await gsxt_detail(**kwargs)
     except Exception as e:
         print('gsxt_detail', e)
-        time.sleep(randint(1, 2))
         retry = kwargs.get("retry", 0)
         retry += 1
-        if retry >= 3:
+        if retry >= 2:
             return None
         kwargs["retry"] = retry
         return await gsxt_detail(**kwargs)
@@ -753,14 +771,16 @@ if __name__ == '__main__':
     # proxy = 'http://127.0.0.1:1080'
     proxy = ''
     # rs = asyncio.get_event_loop().run_until_complete(test())
-    # proxy = asyncio.get_event_loop().run_until_complete(get_proxy())
-    # print(proxy)
-    rs = asyncio.get_event_loop().run_until_complete(tyc(**{"key": "人民日报传媒广告有限公司", "proxy": proxy}))
-    # rs = asyncio.get_event_loop().run_until_complete(qcc(**{"key": "华为终端(深圳)有限公司", "proxy": proxy}))
-    # rs = asyncio.get_event_loop().run_until_complete(qcc(**{"key": "携众集团", "proxy": proxy}))
+    # rs = asyncio.get_event_loop().run_until_complete(get_proxy())
+    kwargs = {"key": "华为终端(深圳)有限公司", "proxy": ""}
+    # kwargs = {**kwargs, **sample(rs, 1)[0]}
+    # rs = asyncio.get_event_loop().run_until_complete(query_ip(**kwargs))
+    # rs = asyncio.get_event_loop().run_until_complete(tyc(**kwargs))
+    # rs = asyncio.get_event_loop().run_until_complete(qcc(**kwargs))
+    rs = asyncio.get_event_loop().run_until_complete(get_proxy(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(
     #     qcc_detail(**{"url": "https://www.qcc.com/firm/963f4179841540334d3a16db3fc3567d.html"}))
-    # rs = asyncio.get_event_loop().run_until_complete(aqc(**{"key": "华为终端(深圳)有限公司", "proxy": proxy}))
+    # rs = asyncio.get_event_loop().run_until_complete(aqc(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(aqc_detail(**{"data": {"pid": "43880125442188"}}))
     # rs = asyncio.get_event_loop().run_until_complete(gsxt(**{"key": "上海宽娱数码科技有限公司"}))
     # pripid = "D1FDF711DFE03EE312CC2ACD3CE218AB448EC78EC78E61ABE228E2ABE2ABE2ABEEABE2ABDF960DC782CB82C7647C-1618992356543"
