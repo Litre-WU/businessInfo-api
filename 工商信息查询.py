@@ -16,6 +16,11 @@ from lxml import etree
 import json
 import time
 from random import randint, sample
+import os
+from json import load, dump
+import socket
+
+host = socket.gethostbyname(socket.gethostname())
 
 # windows系统需要
 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -26,12 +31,12 @@ tags_metadata = [
         "description": "企业工商信息查询(企查查、爱企查)",
         "externalDocs": {
             "description": "More",
-            "url": "http://localhost/docs",
+            "url": f"http://{host}:9003/docs",
         },
     },
 ]
 
-app = FastAPI(openapi_url="/api/v1/api.json", openapi_tags=tags_metadata)
+app = FastAPI(openapi_url="/api/v1/api.json", title="企业工商信息查询接口", openapi_tags=tags_metadata)
 
 
 @app.get("/")
@@ -79,11 +84,15 @@ set_timeout = 5
 async def get_proxy(**kwargs):
     if not kwargs.get("turn", 0):
         time_now = int(time.time())
+        if not os.path.exists('proxy.json'):
+            with open('proxy.json', 'w') as f:
+                dump([], f)
         with open('proxy.json', 'r') as f:
             data = json.load(f)
-            expire_time = int(time.mktime(time.strptime(data[0]["expire_time"], "%Y-%m-%d %H:%M:%S")))
-            if time_now < expire_time:
-                return data
+            if data:
+                expire_time = int(time.mktime(time.strptime(data[0]["expire_time"], "%Y-%m-%d %H:%M:%S")))
+                if time_now < expire_time:
+                    return data
     # # 番茄代理
     # url = 'http://x.fanqieip.com/gip'
     # params = {"getType": "3","qty": "1","port": "1","time": "1","city": "0","format": "2","ss": "1","dt": "1","css": ""}
