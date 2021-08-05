@@ -23,15 +23,15 @@ import socket
 host = socket.gethostbyname(socket.gethostname())
 
 # windows系统需要
-asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+# asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 tags_metadata = [
     {
         "name": "企业工商信息查询接口",
-        "description": "企业工商信息查询(企查查、爱企查)",
+        "description": "企业工商信息查询(天眼查、企查查、爱企查、国家企业公示系统)",
         "externalDocs": {
             "description": "More",
-            "url": f"http://{host}:9003/docs",
+            "url": f"http://{host}/docs",
         },
     },
 ]
