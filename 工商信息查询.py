@@ -8,7 +8,7 @@ import asyncio
 from typing import Optional, List
 from fastapi import FastAPI, Header, Cookie, Depends, BackgroundTasks
 from starlette.requests import Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi.responses import JSONResponse
 import aiohttp
 from user_agent import generate_user_agent
@@ -19,6 +19,7 @@ from random import randint, sample
 import os
 from json import load, dump
 import socket
+from functools import lru_cache
 
 host = socket.gethostbyname(socket.gethostname())
 
@@ -57,8 +58,8 @@ async def index(request: Request, user_agent: Optional[str] = Header(None), x_to
 
 
 class Qcc(BaseModel):
-    key: str = None
-    creditCode: str = None
+    key: str = Field(..., example='哔哩哔哩')
+    creditCode: str = Field(..., example='统一社会信用代码(暂不使用)')
 
 
 # 首页
