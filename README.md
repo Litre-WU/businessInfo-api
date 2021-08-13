@@ -18,7 +18,8 @@ $ gunicorn -c gunicorn.py 工商信息查询:app
 (也可使用uvicorn或者其它)
 
 docker 运行
-
+` ` `
 $ docker build -t businessInfo .
+` ` `
 
 $ docker run --name businessInfo -d -p 8081:8081 businessInfo
