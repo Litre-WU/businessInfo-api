@@ -24,7 +24,7 @@ from functools import lru_cache
 host = socket.gethostbyname(socket.gethostname())
 
 # windows系统需要
-asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+# asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 tags_metadata = [
     {
@@ -461,11 +461,13 @@ async def qcc_detail(**kwargs):
                         "province": info.get("所属地区", ""),
                         "regist_office": info.get("登记机关", ""),
                         "staff_size": info.get("人员规模", ""),
-                        "insured_size": info.get("参保人数", ""),
+                        "insured_size": info.get("参保人数", "") if info.get("参保人数", "") else
+                        [span.strip() for span in table.xpath('tr/td/span/text()') if span.strip()][0],
                         "transformer_name": table.xpath('tr/td/div/text()')[-1].strip(),
                         "name_en": info.get("英文名", ""),
                         "imp_exp_enterprise_code": info.get("进出口企业代码", ""),
-                        "regist_address": info.get("注册地址", "") if info.get("注册地址", "") else table.xpath('tr/td/a[@class="text-dk"]/text()')[0],
+                        "regist_address": info.get("注册地址", "") if info.get("注册地址", "") else
+                        table.xpath('tr/td/a[@class="text-dk"]/text()')[0],
                         "business_scope": info.get("经营范围", ""),
                     }
                     if result.get("license_start_date", ""):
@@ -605,7 +607,7 @@ async def aqc_detail(**kwargs):
                         "license_end_date": result.get("openTime", "").split("至")[-1].strip(),
                         "regist_office": result.get("authority", ""),
                         "staff_size": "",
-                        "insured_size": "",
+                        "insured_size": result["insuranceInfo"]["insuranceNum"],
                         "province": province,
                         "address": result.get("addr", ""),
                         "business_scope": result.get("scope", ""),
@@ -783,14 +785,15 @@ if __name__ == '__main__':
     # rs = asyncio.get_event_loop().run_until_complete(test())
     # rs = asyncio.get_event_loop().run_until_complete(get_proxy())
     kwargs = {"key": "上海茗昊机械工程有限公司", "proxy": ""}
+    # kwargs = {"key": "上海宽娱数码科技有限公司", "proxy": ""}
     # kwargs = {**kwargs, **sample(rs, 1)[0]}
     # rs = asyncio.get_event_loop().run_until_complete(query_ip(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(tyc(**kwargs))
-    rs = asyncio.get_event_loop().run_until_complete(qcc(**kwargs))
+    # rs = asyncio.get_event_loop().run_until_complete(qcc(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(get_proxy(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(
     #     qcc_detail(**{"url": "https://www.qcc.com/firm/963f4179841540334d3a16db3fc3567d.html"}))
-    # rs = asyncio.get_event_loop().run_until_complete(aqc(**kwargs))
+    rs = asyncio.get_event_loop().run_until_complete(aqc(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(aqc_detail(**{"data": {"pid": "43880125442188"}}))
     # rs = asyncio.get_event_loop().run_until_complete(gsxt(**kwargs))
     # pripid = "D1FDF711DFE03EE312CC2ACD3CE218AB448EC78EC78E61ABE228E2ABE2ABE2ABEEABE2ABDF960DC782CB82C7647C-1618992356543"
