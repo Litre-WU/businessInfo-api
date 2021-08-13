@@ -19,12 +19,13 @@ from random import randint, sample
 import os
 from json import load, dump
 import socket
+import platform
 from functools import lru_cache
 
 host = socket.gethostbyname(socket.gethostname())
 
-# windows系统需要
-# asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+if platform.system() == "Windows":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 tags_metadata = [
     {
