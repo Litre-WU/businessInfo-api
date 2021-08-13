@@ -11,12 +11,12 @@ $ pip install requirements.txt -i https://pypi.doubanio.com/simple/
 
 $ uvicorn 工商信息查询:app --host 0.0.0.0 --port 8081 --reload
 
-Linux or mac 运行(工商信息查询.py 26行需要注释)
+Linux or mac 运行(工商信息查询.py 27行需要注释)
 
 $ gunicorn -c gunicorn.py 工商信息查询:app  
 (也可使用uvicorn)
 
-docker 运行(工商信息查询.py 26行需要注释)
+docker 运行(工商信息查询.py 27行需要注释)
 
 $ docker build -t businessInfo .
 
