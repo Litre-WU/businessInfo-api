@@ -8,18 +8,18 @@ tip:需设置代理(默认：http://127.0.0.1:1080)
 
 运行  
 ` ` `
-$ pip install requirements.txt -i https://pypi.doubanio.com/simple/
+pip install requirements.txt -i https://pypi.doubanio.com/simple/
 ` ` `
   
 ` ` `
-$ uvicorn 工商信息查询:app --host 0.0.0.0 --port 8081 --reload
+uvicorn 工商信息查询:app --host 0.0.0.0 --port 8081 --reload
 ` ` `  
 
 docker 运行  
 ` ` `
-$ docker build -t businessInfo .
+docker build -t businessInfo .
 ` ` `  
   
 ` ` `
-$ docker run --name businessInfo -d -p 8081:8081 businessInfo
+docker run --name businessInfo -d -p 8081:8081 businessInfo
 ` ` `
