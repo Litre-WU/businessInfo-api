@@ -24,7 +24,7 @@ from functools import lru_cache
 host = socket.gethostbyname(socket.gethostname())
 
 # windows系统需要
-# asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 tags_metadata = [
     {
@@ -425,7 +425,6 @@ async def qcc_detail(**kwargs):
                                       timeout=set_timeout) as rs:
                 if rs.status == 200:
                     html = await rs.text()
-                    # print(html)
                     table = etree.HTML(html).xpath('//table[@class="ntable"]')[0] if etree.HTML(html).xpath(
                         '//table[@class="ntable"]') else ""
                     if type(table) == str:
@@ -442,6 +441,7 @@ async def qcc_detail(**kwargs):
                         tds += x.xpath('td[@class="tb"]')
                     info = {x.xpath('text()')[0].strip(): x.xpath('following-sibling::node()/text()')[0].strip() for x
                             in tds if x.xpath('following-sibling::node()/text()')}
+                    # print(info)
                     result = {
                         "social_credit_code": info.get("统一社会信用代码", ""),
                         "name_cn": info.get("企业名称", ""),
@@ -462,10 +462,10 @@ async def qcc_detail(**kwargs):
                         "regist_office": info.get("登记机关", ""),
                         "staff_size": info.get("人员规模", ""),
                         "insured_size": info.get("参保人数", ""),
-                        "transformer_name": info.get("曾用名", ""),
+                        "transformer_name": table.xpath('tr/td/div/text()')[-1].strip(),
                         "name_en": info.get("英文名", ""),
                         "imp_exp_enterprise_code": info.get("进出口企业代码", ""),
-                        "regist_address": info.get("注册地址", ""),
+                        "regist_address": info.get("注册地址", "") if info.get("注册地址", "") else table.xpath('tr/td/a[@class="text-dk"]/text()')[0],
                         "business_scope": info.get("经营范围", ""),
                     }
                     if result.get("license_start_date", ""):
@@ -782,17 +782,17 @@ if __name__ == '__main__':
     proxy = ''
     # rs = asyncio.get_event_loop().run_until_complete(test())
     # rs = asyncio.get_event_loop().run_until_complete(get_proxy())
-    kwargs = {"key": "华为终端(深圳)有限公司", "proxy": ""}
+    kwargs = {"key": "上海茗昊机械工程有限公司", "proxy": ""}
     # kwargs = {**kwargs, **sample(rs, 1)[0]}
     # rs = asyncio.get_event_loop().run_until_complete(query_ip(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(tyc(**kwargs))
-    # rs = asyncio.get_event_loop().run_until_complete(qcc(**kwargs))
-    rs = asyncio.get_event_loop().run_until_complete(get_proxy(**kwargs))
+    rs = asyncio.get_event_loop().run_until_complete(qcc(**kwargs))
+    # rs = asyncio.get_event_loop().run_until_complete(get_proxy(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(
     #     qcc_detail(**{"url": "https://www.qcc.com/firm/963f4179841540334d3a16db3fc3567d.html"}))
     # rs = asyncio.get_event_loop().run_until_complete(aqc(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(aqc_detail(**{"data": {"pid": "43880125442188"}}))
-    # rs = asyncio.get_event_loop().run_until_complete(gsxt(**{"key": "上海宽娱数码科技有限公司"}))
+    # rs = asyncio.get_event_loop().run_until_complete(gsxt(**kwargs))
     # pripid = "D1FDF711DFE03EE312CC2ACD3CE218AB448EC78EC78E61ABE228E2ABE2ABE2ABEEABE2ABDF960DC782CB82C7647C-1618992356543"
     # pripid = "0CFD2A1102E0E3E3CFCCF7CDE1E2C5AB998E1A8E1A8EBCAB3FAB3FAB3FAB3FABED75E1F63324BC8E1A8E1A6473B6-1618991419697"
     # rs = asyncio.get_event_loop().run_until_complete(gsxt_detail(**{"data": {"pripid": pripid}}))
