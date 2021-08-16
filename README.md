@@ -6,7 +6,7 @@
 
 tip:需设置代理(默认：http://127.0.0.1:1080)
 
-运行  
+项目运行  
   
 `pip install requirements.txt -i https://pypi.doubanio.com/simple/`
   
@@ -14,6 +14,6 @@ tip:需设置代理(默认：http://127.0.0.1:1080)
 
 docker 运行  
   
- `docker build -t businessInfo . `  
+ `docker build -t businessinfo . `  
    
- `docker run --name businessInfo -d -p 8081:8081 businessInfo`
+ `docker run --name businessInfo -d -p 8081:8081 businessinfo`
