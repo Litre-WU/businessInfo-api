@@ -139,6 +139,7 @@ async def get_proxy(**kwargs):
             "params": params,
         }
         result = await pub_req(**meta)
+        if not result:return None
         result = json.loads(result)
         if result.get("data", ""):
             with open('proxy.json', 'w') as f:
@@ -173,6 +174,7 @@ async def query_ip(**kwargs):
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
+        if not result:return None
         result = json.loads(result)
         # print(result)
         ip = result["origin"].split()[0]
@@ -223,6 +225,7 @@ async def tyc(**kwargs):
             "proxy_pass": kwargs.get("proxy_user", ""),
         }
         result = await pub_req(**meta)
+        if not result:return None
         html = result.decode()
         ids = etree.HTML(html).xpath('//div[@class="search-company-item"]/@onclick')
         if not ids: return None
@@ -255,6 +258,7 @@ async def tyc_detail(**kwargs):
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
+        if not result:return None
         html = result.decode()
         divs = etree.HTML(html).xpath('//div[@class="content"]/div[@class="divide-content"]/div')
         info = [x.xpath('div//text()') for x in divs] if divs else ""
@@ -342,6 +346,7 @@ async def qcc(**kwargs):
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
+        if not result:return None
         html = result.decode()
         content = etree.HTML(html).xpath('//script[1]/text()')
         content = '{"appState' + content[0].split("appState")[1].split(";(function")[
@@ -396,6 +401,7 @@ async def qcc_detail(**kwargs):
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
+        if not result:return None
         html = result.decode()
         # mobile
         table = etree.HTML(html).xpath('//table[@class="info-table"]')
@@ -454,7 +460,7 @@ async def qcc_detail(**kwargs):
             kwargs["retry"] = retry
             return await qcc_detail(**kwargs)
         trs = table.xpath('tr')
-        if not trs: return False
+        if not trs: return None
         tds = []
         for x in trs:
             tds += x.xpath('td[@class="tb"]')
@@ -519,6 +525,7 @@ async def aqc(**kwargs):
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
+        if not result:return None
         html = result.decode()
         content = etree.HTML(html).xpath('//script[1]/text()')
         if content:
@@ -563,6 +570,7 @@ async def aqc_detail(**kwargs):
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
+        if not result:return None
         result = json.loads(result.decode())
         result = result["data"]["basicData"] if result.get("data", "") else ""
         if not result:
@@ -630,6 +638,7 @@ async def gsxt(**kwargs):
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
+        if not result:return None
         result = json.loads(result)
         if result.get("data", ""):
             data_list = []
@@ -664,6 +673,7 @@ async def gsxt_detail(**kwargs):
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
+        if not result:return None
         result = json.loads(result.decode())
         if result.get("result"):
             result = {
