@@ -410,12 +410,16 @@ async def qcc_detail(**kwargs):
     # time.sleep(randint(1, 2))
     proxy = kwargs.get("proxy", "")
     data = kwargs.get("data", "")
-    url = f'https://www.qcc.com/firm/{data["keyNo"]}.html'
+    # url = f'https://www.qcc.com/firm/{data["keyNo"]}.html'
+    # url = f'https://www.qcc.com/cbase/{data["keyNo"]}.html'
+    url = f'https://m.qcc.com/firm/{data["keyNo"]}.html'
     headers = {
-        "user-agent": generate_user_agent(),
-        "cookie": "",
+        "User-Agent": generate_user_agent(),
+        "Connection": "close",
+        # "cookie": "",
         # "cookie": "acw_sc__v2=6062bdefc57536ceeeb840ffcf85497a600eef9f",
-        "referer": f'https://www.qcc.com/firm/{data["keyNo"]}.html'
+        # "referer": f'https://www.qcc.com/firm/{data["keyNo"]}.html'
+        "Referer": f'https://m.qcc.com/firm/{data["keyNo"]}.html',
     }
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
@@ -426,6 +430,53 @@ async def qcc_detail(**kwargs):
                                       timeout=set_timeout) as rs:
                 if rs.status == 200:
                     html = await rs.text()
+                    # mobile
+                    table = etree.HTML(html).xpath('//table[@class="info-table"]')
+                    table = table[0] if table else ""
+                    if type(table) == str: return None
+                    trs = table.xpath('tr')
+                    tds = []
+                    for x in trs:
+                        tds += x.xpath('td')
+                    info = {x.xpath('div[@class="d"]/text()')[0].strip(): x.xpath('div[@class="v"]/text()')[0].strip()
+                            for x in tds if x.xpath('div[@class="d"]/text()')}
+                    result = {
+                        "found_date": info.get("成立日期", ""),
+                        "status": info.get("登记状态", ""),
+                        "registered_capital": info.get("注册资本", ""),
+                        "really_capital": info.get("实缴资本", ""),
+                        "type": info.get("企业类型", ""),
+                        "insured_size": info.get("参保人数", ""),
+                        "staff_size": info.get("人员规模", ""),
+                        "social_credit_code": info.get("统一社会信用代码", ""),
+                        "taxpayer_code": info.get("纳税人识别号", ""),
+                        "regist_code": info.get("工商注册号", ""),
+                        "organization_code": info.get("组织机构代码", ""),
+                        "imp_exp_enterprise_code": info.get("进出口企业代码", ""),
+                        "name_en": info.get("英文名", ""),
+                        "transformer_name": info.get("曾用名", ""),
+                        "industry_involved": info.get("所属行业", ""),
+                        "business_scope": info.get("经营范围", ""),
+                        "regist_address": info.get("企业地址", ""),
+                        "license_start_date": info.get("营业期限", "").split("至")[0].strip(),
+                        "license_end_date": info.get("营业期限", "").split("至")[1].strip(),
+                        "issue_date": info.get("核准日期", ""),
+                        "regist_office": info.get("登记机关", ""),
+                    }
+                    result["legal_person"] = etree.HTML(html).xpath('//a[@class="text-primary oper"]/text()')
+                    result["legal_person"] = result["legal_person"][0].strip() if result["legal_person"] else ""
+                    result["name_cn"] = etree.HTML(html).xpath('//div[@class="company-name"]/h1/text()')[0].strip()
+                    result["unit_phone"] = etree.HTML(html).xpath('//a[@class="phone a-decoration"]/text()')
+                    result["unit_phone"] = result["unit_phone"][0] if result["unit_phone"] else ""
+                    result["email"] = etree.HTML(html).xpath('//a[@class="email a-decoration"]/text()')
+                    result["email"] = result["email"][0] if result["email"] else ""
+                    # info["简介"] = etree.HTML(html).xpath(
+                    #     '//div[@class="content"]/div[@class="content-block"]/div/text()')
+                    # info["简介"] = info["简介"][-1].strip() if info["简介"] else ""
+                    result["transformer_name"] = result["transformer_name"] if result["transformer_name"].strip() else \
+                    etree.HTML(html).xpath('//tr/td/div/span/text()')[0].strip()
+                    return result
+                    # web
                     table = etree.HTML(html).xpath('//table[@class="ntable"]')[0] if etree.HTML(html).xpath(
                         '//table[@class="ntable"]') else ""
                     if type(table) == str:
@@ -785,16 +836,17 @@ if __name__ == '__main__':
     proxy = ''
     # rs = asyncio.get_event_loop().run_until_complete(test())
     # rs = asyncio.get_event_loop().run_until_complete(get_proxy())
-    kwargs = {"key": "上海茗昊机械工程有限公司", "proxy": ""}
+    kwargs = {"key": "上海电气集团股份有限公司", "proxy": ""}
     # kwargs = {"key": "上海宽娱数码科技有限公司", "proxy": ""}
     # kwargs = {**kwargs, **sample(rs, 1)[0]}
     # rs = asyncio.get_event_loop().run_until_complete(query_ip(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(tyc(**kwargs))
-    # rs = asyncio.get_event_loop().run_until_complete(qcc(**kwargs))
+    rs = asyncio.get_event_loop().run_until_complete(qcc(**kwargs))
+    # rs = asyncio.get_event_loop().run_until_complete(qcc_detail(**{"data": {"keyNo": "4deb587a8f9db55953dcadd046c0f17f"}}))
     # rs = asyncio.get_event_loop().run_until_complete(get_proxy(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(
     #     qcc_detail(**{"url": "https://www.qcc.com/firm/963f4179841540334d3a16db3fc3567d.html"}))
-    rs = asyncio.get_event_loop().run_until_complete(aqc(**kwargs))
+    # rs = asyncio.get_event_loop().run_until_complete(aqc(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(aqc_detail(**{"data": {"pid": "43880125442188"}}))
     # rs = asyncio.get_event_loop().run_until_complete(gsxt(**kwargs))
     # pripid = "D1FDF711DFE03EE312CC2ACD3CE218AB448EC78EC78E61ABE228E2ABE2ABE2ABEEABE2ABDF960DC782CB82C7647C-1618992356543"
