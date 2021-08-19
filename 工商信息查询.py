@@ -78,8 +78,39 @@ async def api(data: Qcc, request: Request, background_tasks: BackgroundTasks, x_
     return JSONResponse(result)
 
 
-# 超时时间
-set_timeout = 5
+# 公共请求函数
+async def pub_req(**kwargs):
+    if not kwargs.get("url", ""): return None
+    headers = {"User-Agent": generate_user_agent()} | kwargs.get("headers", {})
+    try:
+        async with aiohttp.ClientSession() as client:
+            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
+            async with client.request(method=kwargs.get("method", "GET"), url=kwargs["url"],
+                                      params=kwargs.get("params", {}),
+                                      data=kwargs.get("data", {}), headers=headers, proxy=kwargs.get("proxy", ""),
+                                      proxy_auth=proxy_auth,
+                                      timeout=kwargs.get("timeout", 20)) as rs:
+                if rs.status == 200:
+                    result = await rs.read()
+                    return result
+                else:
+                    print("pub_req", rs.text)
+                    time.sleep(randint(1, 2))
+                    retry = kwargs.get("retry", 0)
+                    retry += 1
+                    if retry >= 2:
+                        return None
+                    kwargs["retry"] = retry
+                    return await pub_req(**kwargs)
+    except Exception as e:
+        print("pub_req", e)
+        time.sleep(randint(1, 2))
+        retry = kwargs.get("retry", 0)
+        retry += 1
+        if retry >= 2:
+            return None
+        kwargs["retry"] = retry
+        return await pub_req(**kwargs)
 
 
 # 代理
@@ -102,36 +133,25 @@ async def get_proxy(**kwargs):
     url = 'http://webapi.http.zhimacangku.com/getip'
     params = {"num": "1", "type": "2", "pro": "0", "city": "0", "yys": "0", "port": "1", "time": "1", "ts": "1",
               "ys": "0", "cs": "0", "lb": "1", "sb": "0", "pb": "4", "mr": "1", "regions": ""}
-    headers = {
-        "User-Agent": generate_user_agent(),
-        # "X-Forwarded-For": "123.123.123.123",
-    }
     try:
-        async with aiohttp.ClientSession() as client:
-            async with client.request(method="GET", url=url, params=params, headers=headers,
-                                      timeout=set_timeout) as rs:
-                if rs.status == 200:
-                    result = await rs.text()
-                    result = json.loads(result)
-                    if result.get("data", ""):
-                        with open('proxy.json', 'w') as f:
-                            json.dump(result["data"], f)
-                        return result["data"]
-                    else:
-                        time.sleep(randint(0, 1))
-                        retry = kwargs.get("retry", 0)
-                        retry += 1
-                        if retry >= 2:
-                            return None
-                        kwargs["retry"] = retry
-                        return await get_proxy(**kwargs)
-                else:
-                    retry = kwargs.get("retry", 0)
-                    retry += 1
-                    if retry >= 2:
-                        return None
-                    kwargs["retry"] = retry
-                    return await get_proxy(**kwargs)
+        meta = {
+            "url": url,
+            "params": params,
+        }
+        result = await pub_req(**meta)
+        result = json.loads(result)
+        if result.get("data", ""):
+            with open('proxy.json', 'w') as f:
+                json.dump(result["data"], f)
+            return result["data"]
+        else:
+            time.sleep(randint(0, 1))
+            retry = kwargs.get("retry", 0)
+            retry += 1
+            if retry >= 2:
+                return None
+            kwargs["retry"] = retry
+            return await get_proxy(**kwargs)
     except Exception as e:
         print(e)
         retry = kwargs.get("retry", 0)
@@ -144,30 +164,21 @@ async def get_proxy(**kwargs):
 
 # IP查询
 async def query_ip(**kwargs):
-    proxy = kwargs.get("proxy", "") if kwargs.get("proxy", "") else ""
     url = 'http://httpbin.org/get?show_env=1'
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
-                                         connector=aiohttp.TCPConnector(ssl=False),
-                                         trust_env=True) as client:
-            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
-            async with client.request(method="GET", url=url, proxy=proxy, proxy_auth=proxy_auth,
-                                      timeout=set_timeout) as rs:
-                if rs.status == 200:
-                    result = await rs.json()
-                    print(result)
-                    ip = result["origin"].split()[0]
-                    return ip
-                # print(await rs.text())
-                time.sleep(randint(1, 2))
-                retry = kwargs.get("retry", 0)
-                retry += 1
-                if retry >= 2:
-                    return None
-                kwargs["retry"] = retry
-                return await query_ip(**kwargs)
+        meta = {
+            "url": url,
+            "proxy": kwargs.get("proxy", ""),
+            "proxy_user": kwargs.get("proxy_user", ""),
+            "proxy_pass": kwargs.get("proxy_pass", ""),
+        }
+        result = await pub_req(**meta)
+        result = json.loads(result)
+        # print(result)
+        ip = result["origin"].split()[0]
+        return ip
     except Exception as e:
-        print(e)
+        print('query_ip', e)
         time.sleep(randint(1, 2))
         retry = kwargs.get("retry", 0)
         retry += 1
@@ -202,37 +213,23 @@ async def query(**kwargs):
 
 # 天眼查
 async def tyc(**kwargs):
-    proxy = kwargs.get("proxy", "")
-    key = kwargs.get("key", "")
-    url = 'https://m.tianyancha.com/search'
-    params = {"key": key}
-    headers = {
-        "Referer": "https://m.tianyancha.com",
-        "User-Agent": generate_user_agent(),
-    }
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
-                                         connector=aiohttp.TCPConnector(ssl=False),
-                                         trust_env=True) as client:
-            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
-            async with client.request(method="GET", proxy=proxy, proxy_auth=proxy_auth, url=url, params=params,
-                                      headers=headers,
-                                      timeout=set_timeout) as rs:
-                if rs.status == 200:
-                    html = await rs.text()
-                    ids = etree.HTML(html).xpath('//div[@class="search-company-item"]/@onclick')
-                    if not ids: return None
-                    ids = [x.strip("jumpToCompany('").strip("');") for x in ids]
-                    tasks = [asyncio.create_task(tqc_detail(**{"id": ids[i], "proxy": proxy})) for i in range(len(ids))]
-                    result = await asyncio.gather(*tasks)
-                    return [x for x in result if x]
-                else:
-                    retry = kwargs.get("retry", 0)
-                    retry += 1
-                    if retry >= 2:
-                        return None
-                    kwargs["retry"] = retry
-                    return await tyc(**kwargs)
+        meta = {
+            "url": "https://m.tianyancha.com/search",
+            "params": {"key": kwargs.get("key", "")},
+            "headers": {"Referer": "https://m.tianyancha.com"},
+            "proxy": kwargs.get("proxy", ""),
+            "proxy_user": kwargs.get("proxy_user", ""),
+            "proxy_pass": kwargs.get("proxy_user", ""),
+        }
+        result = await pub_req(**meta)
+        html = result.decode()
+        ids = etree.HTML(html).xpath('//div[@class="search-company-item"]/@onclick')
+        if not ids: return None
+        ids = [x.strip("jumpToCompany('").strip("');") for x in ids]
+        tasks = [asyncio.create_task(tyc_detail(**{"id": ids[i], "proxy": kwargs.get("proxy", "")})) for i in range(len(ids))]
+        result = await asyncio.gather(*tasks)
+        return [x for x in result if x]
     except Exception as e:
         print('tyc', e)
         retry = kwargs.get("retry", 0)
@@ -244,94 +241,82 @@ async def tyc(**kwargs):
 
 
 # 天眼查详情
-async def tqc_detail(**kwargs):
-    proxy = kwargs.get("proxy", "")
-    id = kwargs.get("id", "")
-    if not id: return None
-    url = f'https://m.tianyancha.com/company/{id}'
-    headers = {
-        "Referer": "https://m.tianyancha.com/search",
-        "User-Agent": generate_user_agent()
-    }
+async def tyc_detail(**kwargs):
+    _id = kwargs.get("id", "")
+    if not _id: return None
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
-                                         connector=aiohttp.TCPConnector(ssl=False),
-                                         trust_env=True) as client:
-            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
-            async with client.request(method="GET", proxy=proxy, proxy_auth=proxy_auth, url=url, headers=headers,
-                                      timeout=set_timeout) as rs:
-                if rs.status == 200:
-                    html = await rs.text()
-                    # print(html)
-                    divs = etree.HTML(html).xpath('//div[@class="content"]/div[@class="divide-content"]/div')
-                    info = [x.xpath('div//text()') for x in divs] if divs else ""
-                    data = {}
-                    if not info:
-                        retry = kwargs.get("retry", 0)
-                        retry += 1
-                        if retry >= 2:
-                            return None
-                        kwargs["retry"] = retry
-                        return await tqc_detail(**kwargs)
-                    for x in info:
-                        if "法定代表人" in x:
-                            if len(x) == 2:
-                                data[x[0]] = x[1]
-                            else:
-                                data[x[0]] = x[2]
-                        elif "经营范围" in x:
-                            data[x[0]] = x[1]
-                        else:
-                            if len(x) > 3:
-                                for i in range(0, len(x), 2):
-                                    data[x[i]] = x[i + 1]
-                            else:
-                                data[x[0]] = x[1]
-                    result = {
-                        "social_credit_code": data.get("统一社会信用代码", ""),
-                        "name_cn": etree.HTML(html).xpath('//head/title/text()')[0].split("_")[0].split()[0],
-                        "legal_person": data.get("法定代表人", ""),
-                        "status": data.get("经营状态", ""),
-                        "found_date": data.get("成立日期", ""),
-                        "registered_capital": data.get("注册资本", ""),
-                        "really_capital": data.get("实缴资本", ""),
-                        "issue_date": data.get("核准日期", ""),
-                        "organization_code": data.get("组织机构代码", ""),
-                        "regist_code": data.get("工商注册号", ""),
-                        "taxpayer_code": data.get("纳税人识别号", ""),
-                        "type": data.get("企业类型", ""),
-                        "license_start_date": data.get("营业期限", ""),
-                        "taxpayer_crop": data.get("纳税人资质", ""),
-                        "industry_involved": data.get("行业", ""),
-                        "province": data.get("所属地区", ""),
-                        "regist_office": data.get("登记机关", ""),
-                        "staff_size": data.get("人员规模", ""),
-                        "insured_size": data.get("参保人数", ""),
-                        "transformer_name": data.get("曾用名", ""),
-                        "name_en": data.get("英文名称", ""),
-                        "imp_exp_enterprise_code": data.get("进出口企业代码", ""),
-                        "address": data.get("注册地址", ""),
-                        "regist_address": data.get("注册地址", ""),
-                        "business_scope": data.get("经营范围", ""),
-                        "email": "",
-                        "unit_phone": "",
-                        "fax": "",
-                        "website": ""
-                    }
-                    if result.get("license_start_date", ""):
-                        result["license_start_date"], result["license_end_date"] = result["license_start_date"].split(
-                            "至")
-                    else:
-                        result["license_start_date"], result["license_end_date"] = "", ""
-                    return result
+        meta = {
+            "url": f'https://m.tianyancha.com/company/{_id}',
+            "headers": {
+                "Referer": "https://m.tianyancha.com/search",
+                },
+            "proxy": kwargs.get("proxy", ""),
+            "proxy_user": kwargs.get("proxy_user", ""),
+            "proxy_pass": kwargs.get("proxy_pass", ""),
+        }
+        result = await pub_req(**meta)
+        html = result.decode()
+        divs = etree.HTML(html).xpath('//div[@class="content"]/div[@class="divide-content"]/div')
+        info = [x.xpath('div//text()') for x in divs] if divs else ""
+        data = {}
+        if not info:
+            retry = kwargs.get("retry", 0)
+            retry += 1
+            if retry >= 2:
+                return None
+            kwargs["retry"] = retry
+            return await tyc_detail(**kwargs)
+        for x in info:
+            if "法定代表人" in x:
+                if len(x) == 2:
+                    data[x[0]] = x[1]
                 else:
-                    time.sleep(randint(1, 2))
-                    retry = kwargs.get("retry", 0)
-                    retry += 1
-                    if retry >= 3:
-                        return None
-                    kwargs["retry"] = retry
-                    return await tqc_detail(**kwargs)
+                    data[x[0]] = x[2]
+            elif "经营范围" in x:
+                data[x[0]] = x[1]
+            else:
+                if len(x) > 3:
+                    for i in range(0, len(x), 2):
+                        data[x[i]] = x[i + 1]
+                else:
+                    data[x[0]] = x[1]
+        result = {
+            "social_credit_code": data.get("统一社会信用代码", ""),
+            "name_cn": etree.HTML(html).xpath('//head/title/text()')[0].split("_")[0].split()[0],
+            "legal_person": data.get("法定代表人", ""),
+            "status": data.get("经营状态", ""),
+            "found_date": data.get("成立日期", ""),
+            "registered_capital": data.get("注册资本", ""),
+            "really_capital": data.get("实缴资本", ""),
+            "issue_date": data.get("核准日期", ""),
+            "organization_code": data.get("组织机构代码", ""),
+            "regist_code": data.get("工商注册号", ""),
+            "taxpayer_code": data.get("纳税人识别号", ""),
+            "type": data.get("企业类型", ""),
+            "license_start_date": data.get("营业期限", ""),
+            "taxpayer_crop": data.get("纳税人资质", ""),
+            "industry_involved": data.get("行业", ""),
+            "province": data.get("所属地区", ""),
+            "regist_office": data.get("登记机关", ""),
+            "staff_size": data.get("人员规模", ""),
+            "insured_size": data.get("参保人数", ""),
+            "transformer_name": data.get("曾用名", ""),
+            "name_en": data.get("英文名称", ""),
+            "imp_exp_enterprise_code": data.get("进出口企业代码", ""),
+            "address": data.get("注册地址", ""),
+            "regist_address": data.get("注册地址", ""),
+            "business_scope": data.get("经营范围", ""),
+            "email": "",
+            "unit_phone": "",
+            "fax": "",
+            "website": ""
+        }
+        if result.get("license_start_date", ""):
+            result["license_start_date"], result["license_end_date"] = result["license_start_date"].split(
+                "至")
+        else:
+            result["license_start_date"], result["license_end_date"] = "", ""
+        return result
     except Exception as e:
         print('tyc_detail', e)
         retry = kwargs.get("retry", 0)
@@ -339,62 +324,47 @@ async def tqc_detail(**kwargs):
         if retry >= 2:
             return None
         kwargs["retry"] = retry
-        return await tqc_detail(**kwargs)
+        return await tyc_detail(**kwargs)
 
 
 # 企查查
 async def qcc(**kwargs):
-    proxy = kwargs.get("proxy", "")
-    key = kwargs.get("key", "")
-    creditCode = kwargs.get("creditCode", "")
-    url = 'https://www.qcc.com/web/search'
-    params = {
-        "key": key
-    }
-    headers = {
-        "user-agent": generate_user_agent(),
-        "cookie": "",
-        "referer": f"https://www.qcc.com/web/search?key={key}"
-    }
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
-                                         connector=aiohttp.TCPConnector(ssl=False),
-                                         trust_env=True) as client:
-            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
-            async with client.request(method="GET", proxy=proxy, proxy_auth=proxy_auth, url=url, params=params,
-                                      headers=headers,
-                                      timeout=set_timeout) as rs:
-                if rs.status == 200:
-                    html = await rs.text()
-                    content = etree.HTML(html).xpath('//script[1]/text()')
-                    content = '{"appState' + content[0].split("appState")[1].split(";(function")[
-                        0] if content else ""
-                    if not content: return None
-                    result = json.loads(content)
-                    result = result["search"]["searchRes"].get("Result", "") if result else ""
-                    if not result:
-                        return None
-                    data_list = []
-                    for r in result:
-                        data = {
-                            "keyNo": r.get("KeyNo", ""),
-                            "legal_person": r.get("OperName", ""), "email": r.get("Email", ""),
-                            "unit_phone": r.get("ContactNumber", ""), "fax": "",
-                            "address": r.get("Address", "").replace("<em>", "").replace("</em>", ""),
-                            "website": r.get("GW", "")
-                        }
-                        data_list.append(data)
-                    tasks = [asyncio.create_task(qcc_detail(**{"data": data_list[i], "proxy": proxy})) for i in
-                             range(len(data_list))]
-                    result = await asyncio.gather(*tasks)
-                    return [x for x in result if x]
-                else:
-                    retry = kwargs.get("retry", 0)
-                    retry += 1
-                    if retry >= 2:
-                        return None
-                    kwargs["retry"] = retry
-                    return await qcc(**kwargs)
+        meta = {
+            "url":"https://www.qcc.com/web/search",
+            "params":{"key": kwargs.get("key", "")},
+            "headers":{
+                "Cookie": "",
+                "Referer": f'https://www.qcc.com/web/search?key={kwargs.get("key", "")}'
+            },
+            "proxy": kwargs.get("proxy", ""),
+            "proxy_user": kwargs.get("proxy_user", ""),
+            "proxy_pass": kwargs.get("proxy_pass", ""),
+        }
+        result = await pub_req(**meta)
+        html = result.decode()
+        content = etree.HTML(html).xpath('//script[1]/text()')
+        content = '{"appState' + content[0].split("appState")[1].split(";(function")[
+            0] if content else ""
+        if not content: return None
+        result = json.loads(content)
+        result = result["search"]["searchRes"].get("Result", "") if result else ""
+        if not result:
+            return None
+        data_list = []
+        for r in result:
+            data = {
+                "keyNo": r.get("KeyNo", ""),
+                "legal_person": r.get("OperName", ""), "email": r.get("Email", ""),
+                "unit_phone": r.get("ContactNumber", ""), "fax": "",
+                "address": r.get("Address", "").replace("<em>", "").replace("</em>", ""),
+                "website": r.get("GW", "")
+            }
+            data_list.append(data)
+        tasks = [asyncio.create_task(qcc_detail(**{"data": data_list[i], "proxy": kwargs.get("proxy", "")})) for i in
+                 range(len(data_list))]
+        result = await asyncio.gather(*tasks)
+        return [x for x in result if x]
     except Exception as e:
         print('qcc', e)
         retry = kwargs.get("retry", 0)
@@ -407,138 +377,128 @@ async def qcc(**kwargs):
 
 # 企查查企业详情
 async def qcc_detail(**kwargs):
-    # time.sleep(randint(1, 2))
-    proxy = kwargs.get("proxy", "")
     data = kwargs.get("data", "")
-    # url = f'https://www.qcc.com/firm/{data["keyNo"]}.html'
-    # url = f'https://www.qcc.com/cbase/{data["keyNo"]}.html'
-    url = f'https://m.qcc.com/firm/{data["keyNo"]}.html'
-    headers = {
-        "User-Agent": generate_user_agent(),
-        "Connection": "close",
-        # "cookie": "",
-        # "cookie": "acw_sc__v2=6062bdefc57536ceeeb840ffcf85497a600eef9f",
-        # "referer": f'https://www.qcc.com/firm/{data["keyNo"]}.html'
-        "Referer": f'https://m.qcc.com/firm/{data["keyNo"]}.html',
-    }
+    if not data:return None
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
-                                         connector=aiohttp.TCPConnector(ssl=False),
-                                         trust_env=True) as client:
-            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
-            async with client.request(method="GET", proxy=proxy, proxy_auth=proxy_auth, url=url, headers=headers,
-                                      timeout=set_timeout) as rs:
-                if rs.status == 200:
-                    html = await rs.text()
-                    # mobile
-                    table = etree.HTML(html).xpath('//table[@class="info-table"]')
-                    table = table[0] if table else ""
-                    if type(table) == str: return None
-                    trs = table.xpath('tr')
-                    tds = []
-                    for x in trs:
-                        tds += x.xpath('td')
-                    info = {x.xpath('div[@class="d"]/text()')[0].strip(): x.xpath('div[@class="v"]/text()')[0].strip()
-                            for x in tds if x.xpath('div[@class="d"]/text()')}
-                    result = {
-                        "found_date": info.get("成立日期", ""),
-                        "status": info.get("登记状态", ""),
-                        "registered_capital": info.get("注册资本", ""),
-                        "really_capital": info.get("实缴资本", ""),
-                        "type": info.get("企业类型", ""),
-                        "insured_size": info.get("参保人数", ""),
-                        "staff_size": info.get("人员规模", ""),
-                        "social_credit_code": info.get("统一社会信用代码", ""),
-                        "taxpayer_code": info.get("纳税人识别号", ""),
-                        "regist_code": info.get("工商注册号", ""),
-                        "organization_code": info.get("组织机构代码", ""),
-                        "imp_exp_enterprise_code": info.get("进出口企业代码", ""),
-                        "name_en": info.get("英文名", ""),
-                        "transformer_name": info.get("曾用名", ""),
-                        "industry_involved": info.get("所属行业", ""),
-                        "business_scope": info.get("经营范围", ""),
-                        "regist_address": info.get("企业地址", ""),
-                        "license_start_date": info.get("营业期限", "").split("至")[0].strip(),
-                        "license_end_date": info.get("营业期限", "").split("至")[1].strip(),
-                        "issue_date": info.get("核准日期", ""),
-                        "regist_office": info.get("登记机关", ""),
-                    }
-                    result["legal_person"] = etree.HTML(html).xpath('//a[@class="text-primary oper"]/text()')
-                    result["legal_person"] = result["legal_person"][0].strip() if result["legal_person"] else ""
-                    result["name_cn"] = etree.HTML(html).xpath('//div[@class="company-name"]/h1/text()')[0].strip()
-                    result["unit_phone"] = etree.HTML(html).xpath('//a[@class="phone a-decoration"]/text()')
-                    result["unit_phone"] = result["unit_phone"][0] if result["unit_phone"] else ""
-                    result["email"] = etree.HTML(html).xpath('//a[@class="email a-decoration"]/text()')
-                    result["email"] = result["email"][0] if result["email"] else ""
-                    # info["简介"] = etree.HTML(html).xpath(
-                    #     '//div[@class="content"]/div[@class="content-block"]/div/text()')
-                    # info["简介"] = info["简介"][-1].strip() if info["简介"] else ""
-                    result["transformer_name"] = result["transformer_name"] if result["transformer_name"].strip() else \
-                    etree.HTML(html).xpath('//tr/td/div/span/text()')[0].strip()
-                    return result
-                    # web
-                    table = etree.HTML(html).xpath('//table[@class="ntable"]')[0] if etree.HTML(html).xpath(
-                        '//table[@class="ntable"]') else ""
-                    if type(table) == str:
-                        retry = kwargs.get("retry", 0)
-                        retry += 1
-                        if retry >= 2:
-                            return False
-                        kwargs["retry"] = retry
-                        return await qcc_detail(**kwargs)
-                    trs = table.xpath('tr')
-                    if not trs: return False
-                    tds = []
-                    for x in trs:
-                        tds += x.xpath('td[@class="tb"]')
-                    info = {x.xpath('text()')[0].strip(): x.xpath('following-sibling::node()/text()')[0].strip() for x
-                            in tds if x.xpath('following-sibling::node()/text()')}
-                    # print(info)
-                    result = {
-                        "social_credit_code": info.get("统一社会信用代码", ""),
-                        "name_cn": info.get("企业名称", ""),
-                        "legal_person": info.get("法定代表人", ""),
-                        "status": info.get("登记状态", ""),
-                        "found_date": info.get("成立日期", ""),
-                        "registered_capital": info.get("注册资本", ""),
-                        "really_capital": info.get("实缴资本", ""),
-                        "issue_date": info.get("核准日期", ""),
-                        "organization_code": info.get("组织机构代码", ""),
-                        "regist_code": info.get("工商注册号", ""),
-                        "taxpayer_code": info.get("纳税人识别号", ""),
-                        "type": info.get("企业类型", ""),
-                        "license_start_date": info.get("营业期限", "").strip(),
-                        "taxpayer_crop": info.get("纳税人资质", ""),
-                        "industry_involved": info.get("所属行业", ""),
-                        "province": info.get("所属地区", ""),
-                        "regist_office": info.get("登记机关", ""),
-                        "staff_size": info.get("人员规模", ""),
-                        "insured_size": info.get("参保人数", "") if info.get("参保人数", "") else
-                        [span.strip() for span in table.xpath('tr/td/span/text()') if span.strip()][0],
-                        "transformer_name": table.xpath('tr/td/div/text()')[-1].strip(),
-                        "name_en": info.get("英文名", ""),
-                        "imp_exp_enterprise_code": info.get("进出口企业代码", ""),
-                        "regist_address": info.get("注册地址", "") if info.get("注册地址", "") else
-                        table.xpath('tr/td/a[@class="text-dk"]/text()')[0],
-                        "business_scope": info.get("经营范围", ""),
-                    }
-                    if result.get("license_start_date", ""):
-                        result["license_start_date"], result["license_end_date"] = (x.strip() for x in
-                                                                                    result["license_start_date"].split(
-                                                                                        "至"))
-                    else:
-                        result["license_start_date"], result["license_end_date"] = "", ""
-                    result["legal_person"] = data["legal_person"]
-                    return {**data, **result}
-                else:
-                    retry = kwargs.get("retry", 0)
-                    retry += 1
-                    if retry >= 2:
-                        return None
-                    kwargs["retry"] = retry
-                    return await qcc_detail(**kwargs)
+        meta = {
+            # "url": f'https://www.qcc.com/firm/{data["keyNo"]}.html',
+            # "url": f'https://www.qcc.com/cbase/{data["keyNo"]}.html',
+            "url": f'https://m.qcc.com/firm/{data["keyNo"]}.html',
+            "headers": {
+                "Connection": "close",
+                # "cookie": "",
+                # "cookie": "acw_sc__v2=6062bdefc57536ceeeb840ffcf85497a600eef9f",
+                # "referer": f'https://www.qcc.com/firm/{data["keyNo"]}.html'
+                "Referer": f'https://m.qcc.com/firm/{data["keyNo"]}.html',
+            },
+            "proxy": kwargs.get("proxy", ""),
+            "proxy_user": kwargs.get("proxy_user", ""),
+            "proxy_pass": kwargs.get("proxy_pass", ""),
+        }
+        result = await pub_req(**meta)
+        html = result.decode()
+        # mobile
+        table = etree.HTML(html).xpath('//table[@class="info-table"]')
+        table = table[0] if table else ""
+        if type(table) == str: return None
+        trs = table.xpath('tr')
+        tds = []
+        for x in trs:
+            tds += x.xpath('td')
+        info = {x.xpath('div[@class="d"]/text()')[0].strip(): x.xpath('div[@class="v"]/text()')[0].strip()
+                for x in tds if x.xpath('div[@class="d"]/text()')}
+        result = {
+            "found_date": info.get("成立日期", ""),
+            "status": info.get("登记状态", ""),
+            "registered_capital": info.get("注册资本", ""),
+            "really_capital": info.get("实缴资本", ""),
+            "type": info.get("企业类型", ""),
+            "insured_size": info.get("参保人数", ""),
+            "staff_size": info.get("人员规模", ""),
+            "social_credit_code": info.get("统一社会信用代码", ""),
+            "taxpayer_code": info.get("纳税人识别号", ""),
+            "regist_code": info.get("工商注册号", ""),
+            "organization_code": info.get("组织机构代码", ""),
+            "imp_exp_enterprise_code": info.get("进出口企业代码", ""),
+            "name_en": info.get("英文名", ""),
+            "transformer_name": info.get("曾用名", ""),
+            "industry_involved": info.get("所属行业", ""),
+            "business_scope": info.get("经营范围", ""),
+            "regist_address": info.get("企业地址", ""),
+            "license_start_date": info.get("营业期限", "").split("至")[0].strip() if info.get("营业期限", "") else "",
+            "license_end_date": info.get("营业期限", "").split("至")[1].strip() if info.get("营业期限", "") else "",
+            "issue_date": info.get("核准日期", ""),
+            "regist_office": info.get("登记机关", ""),
+        }
+        result["legal_person"] = etree.HTML(html).xpath('//a[@class="text-primary oper"]/text()')
+        result["legal_person"] = result["legal_person"][0].strip() if result["legal_person"] else ""
+        result["name_cn"] = etree.HTML(html).xpath('//div[@class="company-name"]/h1/text()')[0].strip()
+        result["unit_phone"] = etree.HTML(html).xpath('//a[@class="phone a-decoration"]/text()')
+        result["unit_phone"] = result["unit_phone"][0] if result["unit_phone"] else ""
+        result["email"] = etree.HTML(html).xpath('//a[@class="email a-decoration"]/text()')
+        result["email"] = result["email"][0] if result["email"] else ""
+        # info["简介"] = etree.HTML(html).xpath(
+        #     '//div[@class="content"]/div[@class="content-block"]/div/text()')
+        # info["简介"] = info["简介"][-1].strip() if info["简介"] else ""
+        result["transformer_name"] = result["transformer_name"] if result["transformer_name"].strip() else ""
+        result["transformer_name"] = etree.HTML(html).xpath('//tr/td/div/span/text()')[0].strip() if not result["transformer_name"] and  etree.HTML(html).xpath('//tr/td/div/span/text()') else ""
+        return result
+        # web
+        table = etree.HTML(html).xpath('//table[@class="ntable"]')[0] if etree.HTML(html).xpath(
+            '//table[@class="ntable"]') else ""
+        if type(table) == str:
+            retry = kwargs.get("retry", 0)
+            retry += 1
+            if retry >= 2:
+                return False
+            kwargs["retry"] = retry
+            return await qcc_detail(**kwargs)
+        trs = table.xpath('tr')
+        if not trs: return False
+        tds = []
+        for x in trs:
+            tds += x.xpath('td[@class="tb"]')
+        info = {x.xpath('text()')[0].strip(): x.xpath('following-sibling::node()/text()')[0].strip() for x
+                in tds if x.xpath('following-sibling::node()/text()')}
+        # print(info)
+        result = {
+            "social_credit_code": info.get("统一社会信用代码", ""),
+            "name_cn": info.get("企业名称", ""),
+            "legal_person": info.get("法定代表人", ""),
+            "status": info.get("登记状态", ""),
+            "found_date": info.get("成立日期", ""),
+            "registered_capital": info.get("注册资本", ""),
+            "really_capital": info.get("实缴资本", ""),
+            "issue_date": info.get("核准日期", ""),
+            "organization_code": info.get("组织机构代码", ""),
+            "regist_code": info.get("工商注册号", ""),
+            "taxpayer_code": info.get("纳税人识别号", ""),
+            "type": info.get("企业类型", ""),
+            "license_start_date": info.get("营业期限", "").strip(),
+            "taxpayer_crop": info.get("纳税人资质", ""),
+            "industry_involved": info.get("所属行业", ""),
+            "province": info.get("所属地区", ""),
+            "regist_office": info.get("登记机关", ""),
+            "staff_size": info.get("人员规模", ""),
+            "insured_size": info.get("参保人数", "") if info.get("参保人数", "") else
+            [span.strip() for span in table.xpath('tr/td/span/text()') if span.strip()][0],
+            "transformer_name": table.xpath('tr/td/div/text()')[-1].strip(),
+            "name_en": info.get("英文名", ""),
+            "imp_exp_enterprise_code": info.get("进出口企业代码", ""),
+            "regist_address": info.get("注册地址", "") if info.get("注册地址", "") else
+            table.xpath('tr/td/a[@class="text-dk"]/text()')[0],
+            "business_scope": info.get("经营范围", ""),
+        }
+        if result.get("license_start_date", ""):
+            result["license_start_date"], result["license_end_date"] = (x.strip() for x in
+                                                                        result["license_start_date"].split(
+                                                                            "至"))
+        else:
+            result["license_start_date"], result["license_end_date"] = "", ""
+        result["legal_person"] = data["legal_person"]
+        return {**data, **result}
     except Exception as e:
-        print('qcc_detail', e)
+        print('qcc_detail', e, data["keyNo"])
         retry = kwargs.get("retry", 0)
         retry += 1
         if retry >= 2:
@@ -549,51 +509,31 @@ async def qcc_detail(**kwargs):
 
 # 爱企查
 async def aqc(**kwargs):
-    proxy = kwargs.get("proxy", "")
-    key = kwargs.get("key", "")
-    creditCode = kwargs.get("creditCode", "")
-    url = 'https://aiqicha.baidu.com/s'
-    params = {
-        "q": key,
-        "t": "0"
-    }
-    headers = {
-        "User-Agent": generate_user_agent(),
-        "Cookie": "",
-        # "Cookie": "__yjs_st=2_MmMwMTY0YjJkNmI0ZmU1MjllZGU0NTA4ZThmMWI0ZmRjYjUxMmIyZWFmMTRmM2Q1ZTQwMjZjYmY2YmNiMGY0ZmU0NDFjOWM1M2FiNTA1MGRiOTFkMmM4OTczZjQzMzUxZTc2ZjViZmYwYjRmYjhhZGYxYzY2N2YzZTk1MTZmZTg1OTNiZmQ4OTQ3NTNmZTkxZDAwNmVmYzhjNmJmNmMyNTJmY2IxYmJkMTc2NDA3OTVjNGIyYjkyZDQxMWM3YzgwZmQ2ZTQ5MzdjMmI0NjViNmI2MDIxZDA2ODA2ODI0MmQ0YWJlMTkxMTc5NDQyZGQ5YTJkZDI2ZWYxZGE3N2NiZF83X2FkZGY1ZWUw;",
-        "Referer": 'https://aiqicha.baidu.com/'
-    }
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
-                                         connector=aiohttp.TCPConnector(ssl=False),
-                                         trust_env=True) as client:
-            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
-            async with client.request(method="GET", proxy=proxy, proxy_auth=proxy_auth, url=url, params=params,
-                                      headers=headers,
-                                      timeout=set_timeout) as rs:
-                if rs.status == 200:
-                    html = await rs.text()
-                    content = etree.HTML(html).xpath('//script[1]/text()')
-                    if content:
-                        result = '{"sid"' + content[0].split('{"sid"')[1].split(";\n")[0]
-                        # print(result)
-                        result = json.loads(result)
-                        data_list = []
-                        for r in result["result"]["resultList"]:
-                            # if not creditCode or r["regNo"] == creditCode:
-                            #     return await aqc_detail(**{"data": {"pid": r["pid"]}})
-                            data_list.append({"pid": r["pid"]})
-                        tasks = [asyncio.create_task(aqc_detail(**{"data": data_list[i], "proxy": proxy})) for i in
-                                 range(len(data_list))]
-                        result = await asyncio.gather(*tasks)
-                        return [x for x in result if x]
-                else:
-                    retry = kwargs.get("retry", 0)
-                    retry += 1
-                    if retry >= 2:
-                        return None
-                    kwargs["retry"] = retry
-                    return await aqc(**kwargs)
+        meta = {
+            "url":"https://aiqicha.baidu.com/s",
+            "params":{"q": kwargs.get("key", ""),"t": "0"},
+            "headers":{"Cookie": "","Referer": 'https://aiqicha.baidu.com/'},
+            "proxy": kwargs.get("proxy", ""),
+            "proxy_user": kwargs.get("proxy_user", ""),
+            "proxy_pass": kwargs.get("proxy_pass", ""),
+        }
+        result = await pub_req(**meta)
+        html = result.decode()
+        content = etree.HTML(html).xpath('//script[1]/text()')
+        if content:
+            result = '{"sid"' + content[0].split('{"sid"')[1].split(";\n")[0]
+            # print(result)
+            result = json.loads(result)
+            data_list = []
+            for r in result["result"]["resultList"]:
+                # if not creditCode or r["regNo"] == creditCode:
+                #     return await aqc_detail(**{"data": {"pid": r["pid"]}})
+                data_list.append({"pid": r["pid"]})
+            tasks = [asyncio.create_task(aqc_detail(**{"data": data_list[i], "proxy": kwargs.get("proxy", "")})) for i in
+                     range(len(data_list))]
+            result = await asyncio.gather(*tasks)
+            return [x for x in result if x]
     except Exception as e:
         print('aqc', e)
         retry = kwargs.get("retry", 0)
@@ -606,80 +546,67 @@ async def aqc(**kwargs):
 
 # 爱企查企业详情
 async def aqc_detail(**kwargs):
-    proxy = kwargs.get("proxy", "")
     data = kwargs.get("data", "")
-    url = 'https://aiqicha.baidu.com/detail/basicAllDataAjax'
-    params = {
-        "pid": data["pid"]
-    }
-    headers = {
-        "User-Agent": generate_user_agent(),
-        "Cookie": "",
-        # "Cookie": "__yjs_st=2_MmMwMTY0YjJkNmI0ZmU1MjllZGU0NTA4ZThmMWI0ZmRjYjUxMmIyZWFmMTRmM2Q1ZTQwMjZjYmY2YmNiMGY0ZmU0NDFjOWM1M2FiNTA1MGRiOTFkMmM4OTczZjQzMzUxZTc2ZjViZmYwYjRmYjhhZGYxYzY2N2YzZTk1MTZmZTg1OTNiZmQ4OTQ3NTNmZTkxZDAwNmVmYzhjNmJmNmMyNTJmY2IxYmJkMTc2NDA3OTVjNGIyYjkyZDQxMWM3YzgwZmQ2ZTQ5MzdjMmI0NjViNmI2MDIxZDA2ODA2ODI0MmQ0YWJlMTkxMTc5NDQyZGQ5YTJkZDI2ZWYxZGE3N2NiZF83X2FkZGY1ZWUw;",
-        "Referer": f'https://aiqicha.baidu.com/company_detail_{data["pid"]}',
-        "X-Requested-With": "XMLHttpRequest",
-        "Zx-Open-Url": f'https://aiqicha.baidu.com/company_detail_{data["pid"]}'
-    }
+    if not data:return None
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
-                                         connector=aiohttp.TCPConnector(ssl=False),
-                                         trust_env=True) as client:
-            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
-            async with client.request(method="GET", proxy=proxy, proxy_auth=proxy_auth, url=url, params=params,
-                                      headers=headers,
-                                      timeout=set_timeout) as rs:
-                if rs.status == 200:
-                    result = json.loads(await rs.text())
-                    result = result["data"]["basicData"] if result.get("data", "") else ""
-                    if not result:
-                        retry = kwargs.get("retry", 0)
-                        retry += 1
-                        if retry >= 2:
-                            return None
-                        kwargs["retry"] = retry
-                        return await aqc_detail(**kwargs)
-                    province = f'{result["district"].split("省")[0]}省' if "省" in result.get(
-                        "district", "") else f'{result.get("district", "").split("市")[0]}市'
-                    result = {
-                        "name_cn": result.get("entName", ""),
-                        "name_en": "",
-                        "legal_person": result.get("legalPerson", ""),
-                        "registered_capital": result.get("regCapital", ""),
-                        "really_capital": result.get("realCapital", ""),
-                        "found_date": result.get("startDate", ""),
-                        "issue_date": result.get("annualDate", ""),
-                        "social_credit_code": result.get("unifiedCode", ""),
-                        "organization_code": result.get("orgNo", ""),
-                        "regist_code": result.get("licenseNumber", ""),
-                        "taxpayer_code": result.get("regNo", ""),
-                        "imp_exp_enterprise_code": "",
-                        "industry_involved": result.get("industry", ""),
-                        "type": result.get("entType", ""),
-                        "license_start_date": result.get("startDate", ""),
-                        "license_end_date": result.get("openTime", "").split("至")[-1].strip(),
-                        "regist_office": result.get("authority", ""),
-                        "staff_size": "",
-                        "insured_size": result["insuranceInfo"]["insuranceNum"],
-                        "province": province,
-                        "address": result.get("addr", ""),
-                        "business_scope": result.get("scope", ""),
-                        "email": result.get("email", ""),
-                        "unit_phone": result.get("telephone", ""),
-                        "fax": "",
-                        "website": result.get("website", ""),
-                        "regist_address": result.get("regAddr", ""),
-                        "transformer_name": result["prevEntName"][0] if type(result.get("prevEntName", "")) == list else
-                        result.get("prevEntName", ""),
-                        "status": result.get("openStatus", ""),
-                    }
-                    return result
-                else:
-                    retry = kwargs.get("retry", 0)
-                    retry += 1
-                    if retry >= 2:
-                        return None
-                    kwargs["retry"] = retry
-                    return await aqc_detail(**kwargs)
+        meta = {
+            "url":"https://aiqicha.baidu.com/detail/basicAllDataAjax",
+            "params":{"pid": data["pid"]},
+            "headers":{
+                "Cookie": "",
+                "Referer": f'https://aiqicha.baidu.com/company_detail_{data["pid"]}',
+                "X-Requested-With": "XMLHttpRequest",
+                "Zx-Open-Url": f'https://aiqicha.baidu.com/company_detail_{data["pid"]}'
+            },
+            "proxy": kwargs.get("proxy", ""),
+            "proxy_user": kwargs.get("proxy_user", ""),
+            "proxy_pass": kwargs.get("proxy_pass", ""),
+        }
+        result = await pub_req(**meta)
+        result = json.loads(result.decode())
+        result = result["data"]["basicData"] if result.get("data", "") else ""
+        if not result:
+            retry = kwargs.get("retry", 0)
+            retry += 1
+            if retry >= 2:
+                return None
+            kwargs["retry"] = retry
+            return await aqc_detail(**kwargs)
+        province = f'{result["district"].split("省")[0]}省' if "省" in result.get(
+            "district", "") else f'{result.get("district", "").split("市")[0]}市'
+        result = {
+            "name_cn": result.get("entName", ""),
+            "name_en": "",
+            "legal_person": result.get("legalPerson", ""),
+            "registered_capital": result.get("regCapital", ""),
+            "really_capital": result.get("realCapital", ""),
+            "found_date": result.get("startDate", ""),
+            "issue_date": result.get("annualDate", ""),
+            "social_credit_code": result.get("unifiedCode", ""),
+            "organization_code": result.get("orgNo", ""),
+            "regist_code": result.get("licenseNumber", ""),
+            "taxpayer_code": result.get("regNo", ""),
+            "imp_exp_enterprise_code": "",
+            "industry_involved": result.get("industry", ""),
+            "type": result.get("entType", ""),
+            "license_start_date": result.get("startDate", ""),
+            "license_end_date": result.get("openTime", "").split("至")[-1].strip(),
+            "regist_office": result.get("authority", ""),
+            "staff_size": "",
+            "insured_size": result["insuranceInfo"]["insuranceNum"],
+            "province": province,
+            "address": result.get("addr", ""),
+            "business_scope": result.get("scope", ""),
+            "email": result.get("email", ""),
+            "unit_phone": result.get("telephone", ""),
+            "fax": "",
+            "website": result.get("website", ""),
+            "regist_address": result.get("regAddr", ""),
+            "transformer_name": result["prevEntName"][0] if type(result.get("prevEntName", "")) == list else
+            result.get("prevEntName", ""),
+            "status": result.get("openStatus", ""),
+        }
+        return result
     except Exception as e:
         print("aqc_detail", e)
         retry = kwargs.get("retry", 0)
@@ -692,48 +619,28 @@ async def aqc_detail(**kwargs):
 
 # 国家企业信用信息公示系统
 async def gsxt(**kwargs):
-    proxy = kwargs.get("proxy", "")
-    key = kwargs.get("key", "")
-    creditCode = kwargs.get("creditCode", "")
-    url = 'https://app.gsxt.gov.cn/gsxt/corp-query-app-search-1.html'
-    data = {
-        "conditions": '{"excep_tab":"0","ill_tab":"0","area":"0","cStatus":"0","xzxk":"0","xzcf":"0","dydj":"0"}',
-        "searchword": key,
-        "sourceType": "W"
-    }
-    headers = {
-        "User-Agent": generate_user_agent(),
-        "X-Requested-With": "XMLHttpRequest",
-    }
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
-                                         connector=aiohttp.TCPConnector(ssl=False),
-                                         trust_env=True) as client:
-            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
-            async with client.request(method="POST", proxy=proxy, proxy_auth=proxy_auth, url=url, data=data,
-                                      headers=headers,
-                                      timeout=10) as rs:
-                if rs.status == 200:
-                    result = await rs.text()
-                    # print(result)
-                    result = json.loads(result)
-                    if result.get("data", ""):
-                        data_list = []
-                        for r in result["data"]["result"]["data"]:
-                            # if not creditCode or r["uniscId"] == creditCode:
-                            #     return await gsxt_detail(**{"data": {"pripid": r["pripid"]}})
-                            data_list.append({"pripid": r["pripid"]})
-                        tasks = [asyncio.create_task(gsxt_detail(**{"data": data_list[i], "proxy": proxy})) for i in
-                                 range(len(data_list))]
-                        result = await asyncio.gather(*tasks)
-                        return [x for x in result if x]
-                else:
-                    retry = kwargs.get("retry", 0)
-                    retry += 1
-                    if retry >= 2:
-                        return None
-                    kwargs["retry"] = retry
-                    return await gsxt(**kwargs)
+        meta = {
+            "method":"POST",
+            "url": "https://app.gsxt.gov.cn/gsxt/corp-query-app-search-1.html",
+            "data": {"conditions": '{"excep_tab":"0","ill_tab":"0","area":"0","cStatus":"0","xzxk":"0","xzcf":"0","dydj":"0"}',"searchword": kwargs.get("key", ""),"sourceType": "W"},
+            "headers": {"X-Requested-With": "XMLHttpRequest"},
+            "proxy": kwargs.get("proxy", ""),
+            "proxy_user": kwargs.get("proxy_user", ""),
+            "proxy_pass": kwargs.get("proxy_pass", ""),
+        }
+        result = await pub_req(**meta)
+        result = json.loads(result)
+        if result.get("data", ""):
+            data_list = []
+            for r in result["data"]["result"]["data"]:
+                # if not creditCode or r["uniscId"] == creditCode:
+                #     return await gsxt_detail(**{"data": {"pripid": r["pripid"]}})
+                data_list.append({"pripid": r["pripid"]})
+            tasks = [asyncio.create_task(gsxt_detail(**{"data": data_list[i], "proxy": kwargs.get("proxy", "")})) for i in
+                     range(len(data_list))]
+            result = await asyncio.gather(*tasks)
+            return [x for x in result if x]
     except Exception as e:
         print('gsxt', e)
         retry = kwargs.get("retry", 0)
@@ -746,69 +653,51 @@ async def gsxt(**kwargs):
 
 # 国家企业信用信息公示系统公司详情信息
 async def gsxt_detail(**kwargs):
-    proxy = kwargs.get("proxy", "")
     data = kwargs.get("data", "")
-    url = f'https://app.gsxt.gov.cn/gsxt/corp-query-entprise-info-primaryinfoapp-entbaseInfo-{data["pripid"]}.html'
-    params = {
-        "nodeNum": "310000",
-        "entType": "6150",
-        "sourceType": "W"
-    }
-    headers = {
-        "User-Agent": generate_user_agent(),
-        "X-Requested-With": "XMLHttpRequest",
-    }
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
-                                         connector=aiohttp.TCPConnector(ssl=False),
-                                         trust_env=True) as client:
-            proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
-            async with client.request(method='POST', proxy=proxy, proxy_auth=proxy_auth, url=url, params=params,
-                                      headers=headers,
-                                      timeout=10) as rs:
-                if rs.status == 200:
-                    result = await rs.text()
-                    result = json.loads(result)
-                    if result.get("result"):
-                        result = {
-                            "name_cn": result["result"]["entName"],
-                            "name_en": "",
-                            "legal_person": result["result"]["name"],
-                            "registered_capital": f'{result["regCaption"]}{result["regCapCurCN"]}'.strip(),
-                            "really_capital": "",
-                            "found_date": result["result"]["estDate"],
-                            "issue_date": result["result"]["apprDate"],
-                            "social_credit_code": result["result"]["uniscId"],
-                            "organization_code": "",
-                            "regist_code": result["result"]["regNo"],
-                            "taxpayer_code": "",
-                            "imp_exp_enterprise_code": "",
-                            "industry_involved": result["result"]["industryPhy"],
-                            "type": result["result"]["entType_CN"],
-                            "license_start_date": result["result"]["opFrom"],
-                            "license_end_date": result["result"]["opTo"],
-                            "regist_office": result["result"]["regOrg_CN"],
-                            "staff_size": "",
-                            "insured_size": "",
-                            "province": result["nodeNum"],
-                            "address": result["result"]["dom"],
-                            "business_scope": result["result"]["opScope"],
-                            "email": "",
-                            "unit_phone": "",
-                            "fax": "",
-                            "website": "",
-                            "regist_address": result["result"]["dom"],
-                            "transformer_name": "",
-                            "status": result["result"]["regState_CN"],
-                        }
-                        return result
-                else:
-                    retry = kwargs.get("retry", 0)
-                    retry += 1
-                    if retry >= 2:
-                        return None
-                    kwargs["retry"] = retry
-                    return await gsxt_detail(**kwargs)
+        meta = {
+            "url": f'https://app.gsxt.gov.cn/gsxt/corp-query-entprise-info-primaryinfoapp-entbaseInfo-{data["pripid"]}.html',
+            "params": {"nodeNum": "310000","entType": "6150","sourceType": "W"},
+            "headers": {"X-Requested-With": "XMLHttpRequest"},
+            "proxy": kwargs.get("proxy", ""),
+            "proxy_user": kwargs.get("proxy_user", ""),
+            "proxy_pass": kwargs.get("proxy_pass", ""),
+        }
+        result = await pub_req(**meta)
+        result = json.loads(result.decode())
+        if result.get("result"):
+            result = {
+                "name_cn": result["result"]["entName"],
+                "name_en": "",
+                "legal_person": result["result"]["name"],
+                "registered_capital": f'{result["regCaption"]}{result["regCapCurCN"]}'.strip(),
+                "really_capital": "",
+                "found_date": result["result"]["estDate"],
+                "issue_date": result["result"]["apprDate"],
+                "social_credit_code": result["result"]["uniscId"],
+                "organization_code": "",
+                "regist_code": result["result"]["regNo"],
+                "taxpayer_code": "",
+                "imp_exp_enterprise_code": "",
+                "industry_involved": result["result"]["industryPhy"],
+                "type": result["result"]["entType_CN"],
+                "license_start_date": result["result"]["opFrom"],
+                "license_end_date": result["result"]["opTo"],
+                "regist_office": result["result"]["regOrg_CN"],
+                "staff_size": "",
+                "insured_size": "",
+                "province": result["nodeNum"],
+                "address": result["result"]["dom"],
+                "business_scope": result["result"]["opScope"],
+                "email": "",
+                "unit_phone": "",
+                "fax": "",
+                "website": "",
+                "regist_address": result["result"]["dom"],
+                "transformer_name": "",
+                "status": result["result"]["regState_CN"],
+            }
+            return result
     except Exception as e:
         print('gsxt_detail', e)
         retry = kwargs.get("retry", 0)
@@ -836,13 +725,15 @@ if __name__ == '__main__':
     proxy = ''
     # rs = asyncio.get_event_loop().run_until_complete(test())
     # rs = asyncio.get_event_loop().run_until_complete(get_proxy())
-    kwargs = {"key": "上海电气集团股份有限公司", "proxy": ""}
+    # kwargs = {"key": "上海电气集团股份有限公司", "proxy": ""}
     # kwargs = {"key": "上海宽娱数码科技有限公司", "proxy": ""}
+    kwargs = {"key": "哔哩哔哩", "proxy": ""}
     # kwargs = {**kwargs, **sample(rs, 1)[0]}
     # rs = asyncio.get_event_loop().run_until_complete(query_ip(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(tyc(**kwargs))
+    # rs = asyncio.get_event_loop().run_until_complete(tyc_detail(**{"id": "269832472"}))
     rs = asyncio.get_event_loop().run_until_complete(qcc(**kwargs))
-    # rs = asyncio.get_event_loop().run_until_complete(qcc_detail(**{"data": {"keyNo": "4deb587a8f9db55953dcadd046c0f17f"}}))
+    # rs = asyncio.get_event_loop().run_until_complete(qcc_detail(**{"data": {"keyNo": "hbdc8d27a2a556cfcac5001e38f41061"}}))
     # rs = asyncio.get_event_loop().run_until_complete(get_proxy(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(
     #     qcc_detail(**{"url": "https://www.qcc.com/firm/963f4179841540334d3a16db3fc3567d.html"}))
@@ -850,7 +741,7 @@ if __name__ == '__main__':
     # rs = asyncio.get_event_loop().run_until_complete(aqc_detail(**{"data": {"pid": "43880125442188"}}))
     # rs = asyncio.get_event_loop().run_until_complete(gsxt(**kwargs))
     # pripid = "D1FDF711DFE03EE312CC2ACD3CE218AB448EC78EC78E61ABE228E2ABE2ABE2ABEEABE2ABDF960DC782CB82C7647C-1618992356543"
-    # pripid = "0CFD2A1102E0E3E3CFCCF7CDE1E2C5AB998E1A8E1A8EBCAB3FAB3FAB3FAB3FABED75E1F63324BC8E1A8E1A6473B6-1618991419697"
+    # pripid = 'AF2B89C7A13640356C1A541B4234667D3A58B958B9581F7D9C7D9C7D9C7D9C7D1FF213F2F9185FBEDC3DDC3D5F18-1629364295083'
     # rs = asyncio.get_event_loop().run_until_complete(gsxt_detail(**{"data": {"pripid": pripid}}))
     # rs = asyncio.get_event_loop().run_until_complete(get_proxy())
     # rs = asyncio.get_event_loop().run_until_complete(query_ip(**{"proxy": "http://182.111.108.203:45113"}))
