@@ -83,7 +83,8 @@ async def pub_req(**kwargs):
     if not kwargs.get("url", ""): return None
     headers = {"User-Agent": generate_user_agent()} | kwargs.get("headers", {})
     try:
-        async with aiohttp.ClientSession() as client:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
+                                         connector=aiohttp.TCPConnector(ssl=False), trust_env=True) as client:
             proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
             async with client.request(method=kwargs.get("method", "GET"), url=kwargs["url"],
                                       params=kwargs.get("params", {}),
@@ -139,7 +140,7 @@ async def get_proxy(**kwargs):
             "params": params,
         }
         result = await pub_req(**meta)
-        if not result:return None
+        if not result: return None
         result = json.loads(result)
         if result.get("data", ""):
             with open('proxy.json', 'w') as f:
@@ -174,7 +175,7 @@ async def query_ip(**kwargs):
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
-        if not result:return None
+        if not result: return None
         result = json.loads(result)
         # print(result)
         ip = result["origin"].split()[0]
@@ -225,12 +226,13 @@ async def tyc(**kwargs):
             "proxy_pass": kwargs.get("proxy_user", ""),
         }
         result = await pub_req(**meta)
-        if not result:return None
+        if not result: return None
         html = result.decode()
         ids = etree.HTML(html).xpath('//div[@class="search-company-item"]/@onclick')
         if not ids: return None
         ids = [x.strip("jumpToCompany('").strip("');") for x in ids]
-        tasks = [asyncio.create_task(tyc_detail(**{"id": ids[i], "proxy": kwargs.get("proxy", "")})) for i in range(len(ids))]
+        tasks = [asyncio.create_task(tyc_detail(**{"id": ids[i], "proxy": kwargs.get("proxy", "")})) for i in
+                 range(len(ids))]
         result = await asyncio.gather(*tasks)
         return [x for x in result if x]
     except Exception as e:
@@ -252,13 +254,13 @@ async def tyc_detail(**kwargs):
             "url": f'https://m.tianyancha.com/company/{_id}',
             "headers": {
                 "Referer": "https://m.tianyancha.com/search",
-                },
+            },
             "proxy": kwargs.get("proxy", ""),
             "proxy_user": kwargs.get("proxy_user", ""),
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
-        if not result:return None
+        if not result: return None
         html = result.decode()
         divs = etree.HTML(html).xpath('//div[@class="content"]/div[@class="divide-content"]/div')
         info = [x.xpath('div//text()') for x in divs] if divs else ""
@@ -335,9 +337,9 @@ async def tyc_detail(**kwargs):
 async def qcc(**kwargs):
     try:
         meta = {
-            "url":"https://www.qcc.com/web/search",
-            "params":{"key": kwargs.get("key", "")},
-            "headers":{
+            "url": "https://www.qcc.com/web/search",
+            "params": {"key": kwargs.get("key", "")},
+            "headers": {
                 "Cookie": "",
                 "Referer": f'https://www.qcc.com/web/search?key={kwargs.get("key", "")}'
             },
@@ -346,7 +348,7 @@ async def qcc(**kwargs):
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
-        if not result:return None
+        if not result: return None
         html = result.decode()
         content = etree.HTML(html).xpath('//script[1]/text()')
         content = '{"appState' + content[0].split("appState")[1].split(";(function")[
@@ -383,7 +385,7 @@ async def qcc(**kwargs):
 # 企查查企业详情
 async def qcc_detail(**kwargs):
     data = kwargs.get("data", "")
-    if not data:return None
+    if not data: return None
     try:
         meta = {
             # "url": f'https://www.qcc.com/firm/{data["keyNo"]}.html',
@@ -401,7 +403,7 @@ async def qcc_detail(**kwargs):
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
-        if not result:return None
+        if not result: return None
         html = result.decode()
         # mobile
         table = etree.HTML(html).xpath('//table[@class="info-table"]')
@@ -447,7 +449,8 @@ async def qcc_detail(**kwargs):
         #     '//div[@class="content"]/div[@class="content-block"]/div/text()')
         # info["简介"] = info["简介"][-1].strip() if info["简介"] else ""
         result["transformer_name"] = result["transformer_name"] if result["transformer_name"].strip() else ""
-        result["transformer_name"] = etree.HTML(html).xpath('//tr/td/div/span/text()')[0].strip() if not result["transformer_name"] and  etree.HTML(html).xpath('//tr/td/div/span/text()') else ""
+        result["transformer_name"] = etree.HTML(html).xpath('//tr/td/div/span/text()')[0].strip() if not result[
+            "transformer_name"] and etree.HTML(html).xpath('//tr/td/div/span/text()') else ""
         return result
         # web
         table = etree.HTML(html).xpath('//table[@class="ntable"]')[0] if etree.HTML(html).xpath(
@@ -517,15 +520,15 @@ async def qcc_detail(**kwargs):
 async def aqc(**kwargs):
     try:
         meta = {
-            "url":"https://aiqicha.baidu.com/s",
-            "params":{"q": kwargs.get("key", ""),"t": "0"},
-            "headers":{"Cookie": "","Referer": 'https://aiqicha.baidu.com/'},
+            "url": "https://aiqicha.baidu.com/s",
+            "params": {"q": kwargs.get("key", ""), "t": "0"},
+            "headers": {"Cookie": "", "Referer": 'https://aiqicha.baidu.com/'},
             "proxy": kwargs.get("proxy", ""),
             "proxy_user": kwargs.get("proxy_user", ""),
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
-        if not result:return None
+        if not result: return None
         html = result.decode()
         content = etree.HTML(html).xpath('//script[1]/text()')
         if content:
@@ -537,7 +540,8 @@ async def aqc(**kwargs):
                 # if not creditCode or r["regNo"] == creditCode:
                 #     return await aqc_detail(**{"data": {"pid": r["pid"]}})
                 data_list.append({"pid": r["pid"]})
-            tasks = [asyncio.create_task(aqc_detail(**{"data": data_list[i], "proxy": kwargs.get("proxy", "")})) for i in
+            tasks = [asyncio.create_task(aqc_detail(**{"data": data_list[i], "proxy": kwargs.get("proxy", "")})) for i
+                     in
                      range(len(data_list))]
             result = await asyncio.gather(*tasks)
             return [x for x in result if x]
@@ -554,12 +558,12 @@ async def aqc(**kwargs):
 # 爱企查企业详情
 async def aqc_detail(**kwargs):
     data = kwargs.get("data", "")
-    if not data:return None
+    if not data: return None
     try:
         meta = {
-            "url":"https://aiqicha.baidu.com/detail/basicAllDataAjax",
-            "params":{"pid": data["pid"]},
-            "headers":{
+            "url": "https://aiqicha.baidu.com/detail/basicAllDataAjax",
+            "params": {"pid": data["pid"]},
+            "headers": {
                 "Cookie": "",
                 "Referer": f'https://aiqicha.baidu.com/company_detail_{data["pid"]}',
                 "X-Requested-With": "XMLHttpRequest",
@@ -570,7 +574,7 @@ async def aqc_detail(**kwargs):
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
-        if not result:return None
+        if not result: return None
         result = json.loads(result.decode())
         result = result["data"]["basicData"] if result.get("data", "") else ""
         if not result:
@@ -629,16 +633,18 @@ async def aqc_detail(**kwargs):
 async def gsxt(**kwargs):
     try:
         meta = {
-            "method":"POST",
+            "method": "POST",
             "url": "https://app.gsxt.gov.cn/gsxt/corp-query-app-search-1.html",
-            "data": {"conditions": '{"excep_tab":"0","ill_tab":"0","area":"0","cStatus":"0","xzxk":"0","xzcf":"0","dydj":"0"}',"searchword": kwargs.get("key", ""),"sourceType": "W"},
+            "data": {
+                "conditions": '{"excep_tab":"0","ill_tab":"0","area":"0","cStatus":"0","xzxk":"0","xzcf":"0","dydj":"0"}',
+                "searchword": kwargs.get("key", ""), "sourceType": "W"},
             "headers": {"X-Requested-With": "XMLHttpRequest"},
             "proxy": kwargs.get("proxy", ""),
             "proxy_user": kwargs.get("proxy_user", ""),
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
-        if not result:return None
+        if not result: return None
         result = json.loads(result)
         if result.get("data", ""):
             data_list = []
@@ -646,7 +652,8 @@ async def gsxt(**kwargs):
                 # if not creditCode or r["uniscId"] == creditCode:
                 #     return await gsxt_detail(**{"data": {"pripid": r["pripid"]}})
                 data_list.append({"pripid": r["pripid"]})
-            tasks = [asyncio.create_task(gsxt_detail(**{"data": data_list[i], "proxy": kwargs.get("proxy", "")})) for i in
+            tasks = [asyncio.create_task(gsxt_detail(**{"data": data_list[i], "proxy": kwargs.get("proxy", "")})) for i
+                     in
                      range(len(data_list))]
             result = await asyncio.gather(*tasks)
             return [x for x in result if x]
@@ -666,14 +673,14 @@ async def gsxt_detail(**kwargs):
     try:
         meta = {
             "url": f'https://app.gsxt.gov.cn/gsxt/corp-query-entprise-info-primaryinfoapp-entbaseInfo-{data["pripid"]}.html',
-            "params": {"nodeNum": "310000","entType": "6150","sourceType": "W"},
+            "params": {"nodeNum": "310000", "entType": "6150", "sourceType": "W"},
             "headers": {"X-Requested-With": "XMLHttpRequest"},
             "proxy": kwargs.get("proxy", ""),
             "proxy_user": kwargs.get("proxy_user", ""),
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
-        if not result:return None
+        if not result: return None
         result = json.loads(result.decode())
         if result.get("result"):
             result = {
