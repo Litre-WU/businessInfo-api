@@ -389,14 +389,14 @@ async def qcc_detail(**kwargs):
     try:
         meta = {
             # "url": f'https://www.qcc.com/firm/{data["keyNo"]}.html',
-            # "url": f'https://www.qcc.com/cbase/{data["keyNo"]}.html',
-            "url": f'https://m.qcc.com/firm/{data["keyNo"]}.html',
+            "url": f'https://www.qcc.com/cbase/{data["keyNo"]}.html',
+            # "url": f'https://m.qcc.com/firm/{data["keyNo"]}.html',
             "headers": {
                 "Connection": "close",
-                # "cookie": "",
+                "Cookie": "",
                 # "cookie": "acw_sc__v2=6062bdefc57536ceeeb840ffcf85497a600eef9f",
-                # "referer": f'https://www.qcc.com/firm/{data["keyNo"]}.html'
-                "Referer": f'https://m.qcc.com/firm/{data["keyNo"]}.html',
+                "Referer": f'https://www.qcc.com/firm/{data["keyNo"]}.html'
+                # "Referer": f'https://m.qcc.com/firm/{data["keyNo"]}.html',
             },
             "proxy": kwargs.get("proxy", ""),
             "proxy_user": kwargs.get("proxy_user", ""),
@@ -405,53 +405,55 @@ async def qcc_detail(**kwargs):
         result = await pub_req(**meta)
         if not result: return None
         html = result.decode()
-        # mobile
-        table = etree.HTML(html).xpath('//table[@class="info-table"]')
-        table = table[0] if table else ""
-        if type(table) == str: return None
-        trs = table.xpath('tr')
-        tds = []
-        for x in trs:
-            tds += x.xpath('td')
-        info = {x.xpath('div[@class="d"]/text()')[0].strip(): x.xpath('div[@class="v"]/text()')[0].strip()
-                for x in tds if x.xpath('div[@class="d"]/text()')}
-        result = {
-            "found_date": info.get("成立日期", ""),
-            "status": info.get("登记状态", ""),
-            "registered_capital": info.get("注册资本", ""),
-            "really_capital": info.get("实缴资本", ""),
-            "type": info.get("企业类型", ""),
-            "insured_size": info.get("参保人数", ""),
-            "staff_size": info.get("人员规模", ""),
-            "social_credit_code": info.get("统一社会信用代码", ""),
-            "taxpayer_code": info.get("纳税人识别号", ""),
-            "regist_code": info.get("工商注册号", ""),
-            "organization_code": info.get("组织机构代码", ""),
-            "imp_exp_enterprise_code": info.get("进出口企业代码", ""),
-            "name_en": info.get("英文名", ""),
-            "transformer_name": info.get("曾用名", ""),
-            "industry_involved": info.get("所属行业", ""),
-            "business_scope": info.get("经营范围", ""),
-            "regist_address": info.get("企业地址", ""),
-            "license_start_date": info.get("营业期限", "").split("至")[0].strip() if info.get("营业期限", "") else "",
-            "license_end_date": info.get("营业期限", "").split("至")[1].strip() if info.get("营业期限", "") else "",
-            "issue_date": info.get("核准日期", ""),
-            "regist_office": info.get("登记机关", ""),
-        }
-        result["legal_person"] = etree.HTML(html).xpath('//a[@class="text-primary oper"]/text()')
-        result["legal_person"] = result["legal_person"][0].strip() if result["legal_person"] else ""
-        result["name_cn"] = etree.HTML(html).xpath('//div[@class="company-name"]/h1/text()')[0].strip()
-        result["unit_phone"] = etree.HTML(html).xpath('//a[@class="phone a-decoration"]/text()')
-        result["unit_phone"] = result["unit_phone"][0] if result["unit_phone"] else ""
-        result["email"] = etree.HTML(html).xpath('//a[@class="email a-decoration"]/text()')
-        result["email"] = result["email"][0] if result["email"] else ""
-        # info["简介"] = etree.HTML(html).xpath(
-        #     '//div[@class="content"]/div[@class="content-block"]/div/text()')
-        # info["简介"] = info["简介"][-1].strip() if info["简介"] else ""
-        result["transformer_name"] = result["transformer_name"] if result["transformer_name"].strip() else ""
-        result["transformer_name"] = etree.HTML(html).xpath('//tr/td/div/span/text()')[0].strip() if not result[
-            "transformer_name"] and etree.HTML(html).xpath('//tr/td/div/span/text()') else ""
-        return result
+        # # mobile
+        # table = etree.HTML(html).xpath('//table[@class="info-table"]')
+        # table = table[0] if table else ""
+        # if type(table) == str: return None
+        # trs = table.xpath('tr')
+        # tds = []
+        # for x in trs:
+        #     tds += x.xpath('td')
+        # info = {x.xpath('div[@class="d"]/text()')[0].strip(): x.xpath('div[@class="v"]/text()')[0].strip()
+        #         for x in tds if x.xpath('div[@class="d"]/text()')}
+        # result = {
+        #     "found_date": info.get("成立日期", ""),
+        #     "status": info.get("登记状态", ""),
+        #     "registered_capital": info.get("注册资本", ""),
+        #     "really_capital": info.get("实缴资本", ""),
+        #     "type": info.get("企业类型", ""),
+        #     "insured_size": info.get("参保人数", ""),
+        #     "staff_size": info.get("人员规模", ""),
+        #     "social_credit_code": info.get("统一社会信用代码", ""),
+        #     "taxpayer_code": info.get("纳税人识别号", ""),
+        #     "regist_code": info.get("工商注册号", ""),
+        #     "organization_code": info.get("组织机构代码", ""),
+        #     "imp_exp_enterprise_code": info.get("进出口企业代码", ""),
+        #     "name_en": info.get("英文名", ""),
+        #     "transformer_name": info.get("曾用名", ""),
+        #     "industry_involved": info.get("所属行业", ""),
+        #     "business_scope": info.get("经营范围", ""),
+        #     "address": info.get("企业地址", ""),
+        #     "regist_address": info.get("企业地址", ""),
+        #     "license_start_date": info.get("营业期限", "").split("至")[0].strip() if info.get("营业期限", "") else "",
+        #     "license_end_date": info.get("营业期限", "").split("至")[1].strip() if info.get("营业期限", "") else "",
+        #     "issue_date": info.get("核准日期", ""),
+        #     "regist_office": info.get("登记机关", ""),
+        # }
+        # result["legal_person"] = etree.HTML(html).xpath('//a[@class="text-primary oper"]/text()')
+        # result["legal_person"] = result["legal_person"][0].strip() if result["legal_person"] else ""
+        # result["name_cn"] = etree.HTML(html).xpath('//div[@class="company-name"]/h1/text()')[0].strip()
+        # result["unit_phone"] = etree.HTML(html).xpath('//a[@class="phone a-decoration"]/text()')
+        # result["unit_phone"] = result["unit_phone"][0] if result["unit_phone"] else ""
+        # result["email"] = etree.HTML(html).xpath('//a[@class="email a-decoration"]/text()')
+        # result["email"] = result["email"][0] if result["email"] else ""
+        # # info["简介"] = etree.HTML(html).xpath(
+        # #     '//div[@class="content"]/div[@class="content-block"]/div/text()')
+        # # info["简介"] = info["简介"][-1].strip() if info["简介"] else ""
+        # result["transformer_name"] = result["transformer_name"] if result["transformer_name"].strip() else ""
+        # result["transformer_name"] = etree.HTML(html).xpath('//tr/td/div/span/text()')[0].strip() if not result[
+        #     "transformer_name"] and etree.HTML(html).xpath('//tr/td/div/span/text()') else ""
+        # return result
+
         # web
         table = etree.HTML(html).xpath('//table[@class="ntable"]')[0] if etree.HTML(html).xpath(
             '//table[@class="ntable"]') else ""
@@ -469,7 +471,6 @@ async def qcc_detail(**kwargs):
             tds += x.xpath('td[@class="tb"]')
         info = {x.xpath('text()')[0].strip(): x.xpath('following-sibling::node()/text()')[0].strip() for x
                 in tds if x.xpath('following-sibling::node()/text()')}
-        # print(info)
         result = {
             "social_credit_code": info.get("统一社会信用代码", ""),
             "name_cn": info.get("企业名称", ""),
@@ -505,6 +506,7 @@ async def qcc_detail(**kwargs):
         else:
             result["license_start_date"], result["license_end_date"] = "", ""
         result["legal_person"] = data["legal_person"]
+        data.pop("keyNo")
         return {**data, **result}
     except Exception as e:
         print('qcc_detail', e, data["keyNo"])
