@@ -288,7 +288,7 @@ async def tyc_detail(**kwargs):
                     data[x[0]] = x[1]
         result = {
             "social_credit_code": data.get("统一社会信用代码", ""),
-            "name_cn": etree.HTML(html).xpath('//head/title/text()')[0].split("_")[0].split()[0],
+            "name_cn": etree.HTML(html).xpath('//meta[@name="tyc-wx-title"]/@content')[0],
             "legal_person": data.get("法定代表人", ""),
             "status": data.get("经营状态", ""),
             "found_date": data.get("成立日期", ""),
@@ -362,7 +362,8 @@ async def qcc(**kwargs):
         for r in result:
             data = {
                 "keyNo": r.get("KeyNo", ""),
-                "legal_person": r.get("OperName", ""), "email": r.get("Email", ""),
+                "legal_person": r.get("OperName", "").replace("<em>", "").replace("</em>", ""),
+                "email": r.get("Email", ""),
                 "unit_phone": r.get("ContactNumber", ""), "fax": "",
                 "address": r.get("Address", "").replace("<em>", "").replace("</em>", ""),
                 "website": r.get("GW", "")
@@ -746,12 +747,12 @@ if __name__ == '__main__':
     # rs = asyncio.get_event_loop().run_until_complete(get_proxy())
     # kwargs = {"key": "上海电气集团股份有限公司", "proxy": ""}
     # kwargs = {"key": "上海宽娱数码科技有限公司", "proxy": ""}
-    kwargs = {"key": "哔哩哔哩", "proxy": ""}
+    kwargs = {"key": "厦门臻旻建筑工程有限公司", "proxy": ""}
     # kwargs = {**kwargs, **sample(rs, 1)[0]}
     # rs = asyncio.get_event_loop().run_until_complete(query_ip(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(tyc(**kwargs))
-    # rs = asyncio.get_event_loop().run_until_complete(tyc_detail(**{"id": "269832472"}))
-    rs = asyncio.get_event_loop().run_until_complete(qcc(**kwargs))
+    rs = asyncio.get_event_loop().run_until_complete(tyc_detail(**{"id": "269832472"}))
+    # rs = asyncio.get_event_loop().run_until_complete(qcc(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(qcc_detail(**{"data": {"keyNo": "hbdc8d27a2a556cfcac5001e38f41061"}}))
     # rs = asyncio.get_event_loop().run_until_complete(get_proxy(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(
