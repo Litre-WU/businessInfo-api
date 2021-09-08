@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 import aiohttp
 from user_agent import generate_user_agent
 from lxml import etree
+import pandas as pd
 import json
 import time
 from random import randint, sample
@@ -41,6 +42,7 @@ tags_metadata = [
 app = FastAPI(openapi_url="/api/v1/api.json", title="企业工商信息查询接口", openapi_tags=tags_metadata)
 
 
+# 首页
 @app.get("/")
 async def index(request: Request, user_agent: Optional[str] = Header(None), x_token: List[str] = Header(None), ):
     result = {
@@ -63,7 +65,6 @@ class Qcc(BaseModel):
     creditCode: str = Field(..., example='统一社会信用代码(暂不使用)')
 
 
-# 首页
 @app.post("/", response_model=Qcc)
 async def api(data: Qcc, request: Request, background_tasks: BackgroundTasks, x_token: List[str] = Header(None),
               user_agent: Optional[str] = Header(None)):
@@ -83,6 +84,7 @@ async def pub_req(**kwargs):
     if not kwargs.get("url", ""): return None
     headers = {"User-Agent": generate_user_agent()} | kwargs.get("headers", {})
     try:
+        # aiohttp
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
                                          connector=aiohttp.TCPConnector(ssl=False), trust_env=True) as client:
             proxy_auth = aiohttp.BasicAuth(kwargs.get("proxy_user", ""), kwargs.get("proxy_pass", ""))
@@ -90,7 +92,7 @@ async def pub_req(**kwargs):
                                       params=kwargs.get("params", {}),
                                       data=kwargs.get("data", {}), headers=headers, proxy=kwargs.get("proxy", ""),
                                       proxy_auth=proxy_auth,
-                                      timeout=kwargs.get("timeout", 20)) as rs:
+                                      timeout=kwargs.get("timeout", 5)) as rs:
                 if rs.status == 200:
                     result = await rs.read()
                     return result
@@ -140,6 +142,7 @@ async def get_proxy(**kwargs):
             "params": params,
         }
         result = await pub_req(**meta)
+        print(result.decode())
         if not result: return None
         result = json.loads(result)
         if result.get("data", ""):
@@ -405,73 +408,17 @@ async def qcc_detail(**kwargs):
         }
         result = await pub_req(**meta)
         if not result: return None
-        html = result.decode()
-        # # mobile
-        # table = etree.HTML(html).xpath('//table[@class="info-table"]')
-        # table = table[0] if table else ""
-        # if type(table) == str: return None
-        # trs = table.xpath('tr')
-        # tds = []
-        # for x in trs:
-        #     tds += x.xpath('td')
-        # info = {x.xpath('div[@class="d"]/text()')[0].strip(): x.xpath('div[@class="v"]/text()')[0].strip()
-        #         for x in tds if x.xpath('div[@class="d"]/text()')}
-        # result = {
-        #     "found_date": info.get("成立日期", ""),
-        #     "status": info.get("登记状态", ""),
-        #     "registered_capital": info.get("注册资本", ""),
-        #     "really_capital": info.get("实缴资本", ""),
-        #     "type": info.get("企业类型", ""),
-        #     "insured_size": info.get("参保人数", ""),
-        #     "staff_size": info.get("人员规模", ""),
-        #     "social_credit_code": info.get("统一社会信用代码", ""),
-        #     "taxpayer_code": info.get("纳税人识别号", ""),
-        #     "regist_code": info.get("工商注册号", ""),
-        #     "organization_code": info.get("组织机构代码", ""),
-        #     "imp_exp_enterprise_code": info.get("进出口企业代码", ""),
-        #     "name_en": info.get("英文名", ""),
-        #     "transformer_name": info.get("曾用名", ""),
-        #     "industry_involved": info.get("所属行业", ""),
-        #     "business_scope": info.get("经营范围", ""),
-        #     "address": info.get("企业地址", ""),
-        #     "regist_address": info.get("企业地址", ""),
-        #     "license_start_date": info.get("营业期限", "").split("至")[0].strip() if info.get("营业期限", "") else "",
-        #     "license_end_date": info.get("营业期限", "").split("至")[1].strip() if info.get("营业期限", "") else "",
-        #     "issue_date": info.get("核准日期", ""),
-        #     "regist_office": info.get("登记机关", ""),
-        # }
-        # result["legal_person"] = etree.HTML(html).xpath('//a[@class="text-primary oper"]/text()')
-        # result["legal_person"] = result["legal_person"][0].strip() if result["legal_person"] else ""
-        # result["name_cn"] = etree.HTML(html).xpath('//div[@class="company-name"]/h1/text()')[0].strip()
-        # result["unit_phone"] = etree.HTML(html).xpath('//a[@class="phone a-decoration"]/text()')
-        # result["unit_phone"] = result["unit_phone"][0] if result["unit_phone"] else ""
-        # result["email"] = etree.HTML(html).xpath('//a[@class="email a-decoration"]/text()')
-        # result["email"] = result["email"][0] if result["email"] else ""
-        # # info["简介"] = etree.HTML(html).xpath(
-        # #     '//div[@class="content"]/div[@class="content-block"]/div/text()')
-        # # info["简介"] = info["简介"][-1].strip() if info["简介"] else ""
-        # result["transformer_name"] = result["transformer_name"] if result["transformer_name"].strip() else ""
-        # result["transformer_name"] = etree.HTML(html).xpath('//tr/td/div/span/text()')[0].strip() if not result[
-        #     "transformer_name"] and etree.HTML(html).xpath('//tr/td/div/span/text()') else ""
-        # return result
-
-        # web
-        table = etree.HTML(html).xpath('//table[@class="ntable"]')[0] if etree.HTML(html).xpath(
-            '//table[@class="ntable"]') else ""
-        if type(table) == str:
-            retry = kwargs.get("retry", 0)
-            retry += 1
-            if retry >= 2:
-                return False
-            kwargs["retry"] = retry
-            return await qcc_detail(**kwargs)
-        trs = table.xpath('tr')
-        if not trs: return None
-        tds = []
-        for x in trs:
-            tds += x.xpath('td[@class="tb"]')
-        info = {x.xpath('text()')[0].strip(): x.xpath('following-sibling::node()/text()')[0].strip() for x
-                in tds if x.xpath('following-sibling::node()/text()')}
+        tables = pd.read_html(result.decode())
+        # print(tables)
+        info_list = []
+        for t in tables[0].values.tolist():
+            info_list += t
+        info = {}
+        for i, x in enumerate(info_list):
+            if i % 2 == 0:
+                if "复制" in x:
+                    continue
+                info[x] = info_list[i + 1].replace("复制", "").strip()
         result = {
             "social_credit_code": info.get("统一社会信用代码", ""),
             "name_cn": info.get("企业名称", ""),
@@ -485,19 +432,17 @@ async def qcc_detail(**kwargs):
             "regist_code": info.get("工商注册号", ""),
             "taxpayer_code": info.get("纳税人识别号", ""),
             "type": info.get("企业类型", ""),
-            "license_start_date": info.get("营业期限", "").strip(),
+            "license_start_date": info.get("营业期限", ""),
             "taxpayer_crop": info.get("纳税人资质", ""),
             "industry_involved": info.get("所属行业", ""),
             "province": info.get("所属地区", ""),
             "regist_office": info.get("登记机关", ""),
             "staff_size": info.get("人员规模", ""),
-            "insured_size": info.get("参保人数", "") if info.get("参保人数", "") else
-            [span.strip() for span in table.xpath('tr/td/span/text()') if span.strip()][0],
-            "transformer_name": table.xpath('tr/td/div/text()')[-1].strip(),
-            "name_en": info.get("英文名", ""),
+            "insured_size": info.get("参保人数", ""),
+            "transformer_name": info.get("曾用名", ""),
+            "name_en": info.get("英文名", "").split("（")[0],
             "imp_exp_enterprise_code": info.get("进出口企业代码", ""),
-            "regist_address": info.get("注册地址", "") if info.get("注册地址", "") else
-            table.xpath('tr/td/a[@class="text-dk"]/text()')[0],
+            "regist_address": info.get("注册地址", "").split()[0],
             "business_scope": info.get("经营范围", ""),
         }
         if result.get("license_start_date", ""):
@@ -506,9 +451,63 @@ async def qcc_detail(**kwargs):
                                                                             "至"))
         else:
             result["license_start_date"], result["license_end_date"] = "", ""
-        result["legal_person"] = data["legal_person"]
         data.pop("keyNo")
-        return {**data, **result}
+        result = result | data
+        # # web
+        # table = etree.HTML(html).xpath('//table[@class="ntable"]')[0] if etree.HTML(html).xpath(
+        #     '//table[@class="ntable"]') else ""
+        # if type(table) == str:
+        #     retry = kwargs.get("retry", 0)
+        #     retry += 1
+        #     if retry >= 2:
+        #         return False
+        #     kwargs["retry"] = retry
+        #     return await qcc_detail(**kwargs)
+        # trs = table.xpath('tr')
+        # if not trs: return None
+        # tds = []
+        # for x in trs:
+        #     tds += x.xpath('td[@class="tb"]')
+        # info = {x.xpath('text()')[0].strip(): x.xpath('following-sibling::node()/text()')[0].strip() for x
+        #         in tds if x.xpath('following-sibling::node()/text()')}
+        # result = {
+        #     "social_credit_code": info.get("统一社会信用代码", ""),
+        #     "name_cn": info.get("企业名称", ""),
+        #     "legal_person": info.get("法定代表人", ""),
+        #     "status": info.get("登记状态", ""),
+        #     "found_date": info.get("成立日期", ""),
+        #     "registered_capital": info.get("注册资本", ""),
+        #     "really_capital": info.get("实缴资本", ""),
+        #     "issue_date": info.get("核准日期", ""),
+        #     "organization_code": info.get("组织机构代码", ""),
+        #     "regist_code": info.get("工商注册号", ""),
+        #     "taxpayer_code": info.get("纳税人识别号", ""),
+        #     "type": info.get("企业类型", ""),
+        #     "license_start_date": info.get("营业期限", "").strip(),
+        #     "taxpayer_crop": info.get("纳税人资质", ""),
+        #     "industry_involved": info.get("所属行业", ""),
+        #     "province": info.get("所属地区", ""),
+        #     "regist_office": info.get("登记机关", ""),
+        #     "staff_size": info.get("人员规模", ""),
+        #     "insured_size": info.get("参保人数", "") if info.get("参保人数", "") else
+        #     [span.strip() for span in table.xpath('tr/td/span/text()') if span.strip()][0],
+        #     "transformer_name": table.xpath('tr/td/div/text()')[-1].strip() if table.xpath('tr/td/div/text()') else "",
+        #     "name_en": info.get("英文名", ""),
+        #     "imp_exp_enterprise_code": info.get("进出口企业代码", ""),
+        #     "regist_address": info.get("注册地址", "") if info.get("注册地址", "") else
+        #     table.xpath('tr/td/a[@class="text-dk"]/text()')[0],
+        #     "business_scope": info.get("经营范围", ""),
+        # }
+        # if result.get("license_start_date", ""):
+        #     result["license_start_date"], result["license_end_date"] = (x.strip() for x in
+        #                                                                 result["license_start_date"].split(
+        #                                                                     "至"))
+        # else:
+        #     result["license_start_date"], result["license_end_date"] = "", ""
+        # result["legal_person"] = data.get("legal_person", "")
+        # data.pop("keyNo")
+        # print({**data, **result})
+        return result
     except Exception as e:
         print('qcc_detail', e, data["keyNo"])
         retry = kwargs.get("retry", 0)
@@ -747,14 +746,20 @@ if __name__ == '__main__':
     # rs = asyncio.get_event_loop().run_until_complete(get_proxy())
     # kwargs = {"key": "上海电气集团股份有限公司", "proxy": ""}
     # kwargs = {"key": "上海宽娱数码科技有限公司", "proxy": ""}
-    kwargs = {"key": "厦门臻旻建筑工程有限公司", "proxy": ""}
+    # kwargs = {"key": "厦门臻旻建筑工程有限公司", "proxy": ""}
+    kwargs = {"key": "哔哩哔哩", "proxy": ""}
+    # kwargs = {"key": "广东携众建筑咨询服务有限公司", "proxy": ""}
+    # kwargs = {"key": "上海茗昊机械工程有限公司", "proxy": ""}
     # kwargs = {**kwargs, **sample(rs, 1)[0]}
     # rs = asyncio.get_event_loop().run_until_complete(query_ip(**kwargs))
     # rs = asyncio.get_event_loop().run_until_complete(tyc(**kwargs))
-    rs = asyncio.get_event_loop().run_until_complete(tyc_detail(**{"id": "269832472"}))
+    rs = asyncio.get_event_loop().run_until_complete(tyc_detail(**{"id": "3149889182"}))
     # rs = asyncio.get_event_loop().run_until_complete(qcc(**kwargs))
-    # rs = asyncio.get_event_loop().run_until_complete(qcc_detail(**{"data": {"keyNo": "hbdc8d27a2a556cfcac5001e38f41061"}}))
-    # rs = asyncio.get_event_loop().run_until_complete(get_proxy(**kwargs))
+    # rs = asyncio.get_event_loop().run_until_complete(
+    #     qcc_detail(**{"data": {"keyNo": "hbdc8d27a2a556cfcac5001e38f41061"}}))
+    # rs = asyncio.get_event_loop().run_until_complete(
+    #     qcc_detail(**{"data": {"keyNo": "963f4179841540334d3a16db3fc3567d"}}))
+    # rs = asyncio.get_event_loop().run_until_complete(get_proxy(**{"turn": 1}))
     # rs = asyncio.get_event_loop().run_until_complete(
     #     qcc_detail(**{"url": "https://www.qcc.com/firm/963f4179841540334d3a16db3fc3567d.html"}))
     # rs = asyncio.get_event_loop().run_until_complete(aqc(**kwargs))
@@ -766,3 +771,5 @@ if __name__ == '__main__':
     # rs = asyncio.get_event_loop().run_until_complete(get_proxy())
     # rs = asyncio.get_event_loop().run_until_complete(query_ip(**{"proxy": "http://182.111.108.203:45113"}))
     print(rs)
+
+    # Tunnel connection failed: 401 Authorized failed
