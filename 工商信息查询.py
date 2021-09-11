@@ -70,12 +70,6 @@ class Qcc(BaseModel):
 async def api(data: Qcc, request: Request, background_tasks: BackgroundTasks, x_token: List[str] = Header(None),
               user_agent: Optional[str] = Header(None)):
     kwargs = data.dict()
-    # 设置第三方代理
-    proxy = await get_proxy()
-    if proxy:
-        kwargs = kwargs | {"proxy": f'http://{proxy[0]["ip"]}:{proxy[0]["port"]}'}
-    else:
-        kwargs = kwargs | {"proxy": ""}
     result = await query(**kwargs)
     return JSONResponse(result)
 
@@ -204,6 +198,12 @@ async def query(**kwargs):
     if result:
         result = {"code": 200, "msg": "OK", "result": result}
     else:
+        # 设置第三方代理
+        proxy = await get_proxy()
+        if proxy:
+            kwargs = kwargs | {"proxy": f'http://{proxy[0]["ip"]}:{proxy[0]["port"]}'}
+        else:
+            kwargs = kwargs | {"proxy": ""}
         retry = kwargs.get("retry", 0)
         retry += 1
         if retry >= 2:
