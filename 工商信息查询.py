@@ -214,7 +214,7 @@ async def query(**kwargs):
             else:
                 kwargs = kwargs | {"proxy": ""}
             return await query(**kwargs)
-        if retry >= 2:
+        if retry > 2:
             return {"code": 200, "msg": "Fail", "result": None}
         kwargs["retry"] = retry
         # 第二次更换代理IP
