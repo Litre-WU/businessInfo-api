@@ -22,6 +22,9 @@ from json import load, dump
 import socket
 from sys import platform
 from functools import lru_cache
+from loguru import logger
+
+logger.add(f'{os.path.basename(__file__)[:-3]}.log', rotation='0:00', enqueue=True, serialize=False, encoding="UTF-8", retention="7 days")
 
 host = socket.gethostbyname(socket.gethostname())
 
@@ -92,7 +95,7 @@ async def pub_req(**kwargs):
                     result = await rs.read()
                     return result
                 else:
-                    print("pub_req", rs.text)
+                    logger.info(f"pub_req {rs.text}")
                     time.sleep(randint(1, 2))
                     retry = kwargs.get("retry", 0)
                     retry += 1
@@ -101,7 +104,7 @@ async def pub_req(**kwargs):
                     kwargs["retry"] = retry
                     return await pub_req(**kwargs)
     except Exception as e:
-        print("pub_req", e)
+        logger.info(f"pub_req {e}")
         time.sleep(randint(1, 2))
         retry = kwargs.get("retry", 0)
         retry += 1
@@ -137,7 +140,7 @@ async def get_proxy(**kwargs):
             "params": params,
         }
         result = await pub_req(**meta)
-        print(result.decode())
+        logger.info(result.decode())
         if not result: return None
         result = json.loads(result)
         if result.get("data", ""):
@@ -153,7 +156,7 @@ async def get_proxy(**kwargs):
             kwargs["retry"] = retry
             return await get_proxy(**kwargs)
     except Exception as e:
-        print(e)
+        logger.info(e)
         retry = kwargs.get("retry", 0)
         retry += 1
         if retry >= 2:
@@ -175,11 +178,11 @@ async def query_ip(**kwargs):
         result = await pub_req(**meta)
         if not result: return None
         result = json.loads(result)
-        # print(result)
+        # logger.info(result)
         ip = result["origin"].split()[0]
         return ip
     except Exception as e:
-        print('query_ip', e)
+        logger.info(f'query_ip {e}')
         time.sleep(randint(1, 2))
         retry = kwargs.get("retry", 0)
         retry += 1
@@ -198,26 +201,19 @@ async def query(**kwargs):
     if result:
         result = {"code": 200, "msg": "OK", "result": result}
     else:
-        # 设置第三方代理
+        retry = kwargs.get("retry", 0)
+        retry += 1
+        # 第一次代理
         proxy = await get_proxy()
         if proxy:
             kwargs = kwargs | {"proxy": f'http://{proxy[0]["ip"]}:{proxy[0]["port"]}'}
         else:
             kwargs = kwargs | {"proxy": ""}
-        retry = kwargs.get("retry", 0)
-        retry += 1
-        if retry == 1:
-            # 第一次使用代理
-            proxy = await get_proxy()
-            if proxy:
-                kwargs = kwargs | {"proxy": f'http://{proxy[0]["ip"]}:{proxy[0]["port"]}'}
-            else:
-                kwargs = kwargs | {"proxy": ""}
             return await query(**kwargs)
         if retry > 2:
             return {"code": 200, "msg": "Fail", "result": None}
         kwargs["retry"] = retry
-        # 第二次更换代理IP
+        # 第二次更换代理
         proxy = await get_proxy(**{"turn": 1})
         if proxy:
             kwargs = kwargs | {"proxy": f'http://{proxy[0]["ip"]}:{proxy[0]["port"]}'}
@@ -249,7 +245,7 @@ async def tyc(**kwargs):
         result = await asyncio.gather(*tasks)
         return [x for x in result if x]
     except Exception as e:
-        print('tyc', e)
+        logger.info(f'tyc {e}')
         retry = kwargs.get("retry", 0)
         retry += 1
         if retry >= 2:
@@ -337,7 +333,7 @@ async def tyc_detail(**kwargs):
             result["license_start_date"], result["license_end_date"] = "", ""
         return result
     except Exception as e:
-        print('tyc_detail', e)
+        logger.info(f'tyc_detail {e}')
         retry = kwargs.get("retry", 0)
         retry += 1
         if retry >= 2:
@@ -387,7 +383,7 @@ async def qcc(**kwargs):
         result = await asyncio.gather(*tasks)
         return [x for x in result if x]
     except Exception as e:
-        print('qcc', e)
+        logger.info(f'qcc {e}')
         retry = kwargs.get("retry", 0)
         retry += 1
         if retry >= 2:
@@ -419,7 +415,7 @@ async def qcc_detail(**kwargs):
         result = await pub_req(**meta)
         if not result: return None
         tables = pd.read_html(result.decode())
-        # print(tables)
+        # logger.info(tables)
         info_list = []
         for t in tables[0].values.tolist():
             info_list += t
@@ -516,10 +512,10 @@ async def qcc_detail(**kwargs):
         #     result["license_start_date"], result["license_end_date"] = "", ""
         # result["legal_person"] = data.get("legal_person", "")
         # data.pop("keyNo")
-        # print({**data, **result})
+        # logger.info({**data, **result})
         return result
     except Exception as e:
-        print('qcc_detail', e, data["keyNo"])
+        logger.info(f'qcc_detail {e} {data["keyNo"]}')
         retry = kwargs.get("retry", 0)
         retry += 1
         if retry >= 2:
@@ -545,7 +541,7 @@ async def aqc(**kwargs):
         content = etree.HTML(html).xpath('//script[1]/text()')
         if content:
             result = '{"sid"' + content[0].split('{"sid"')[1].split(";\n")[0]
-            # print(result)
+            # logger.info(result)
             result = json.loads(result)
             data_list = []
             for r in result["result"]["resultList"]:
@@ -558,7 +554,7 @@ async def aqc(**kwargs):
             result = await asyncio.gather(*tasks)
             return [x for x in result if x]
     except Exception as e:
-        print('aqc', e)
+        logger.info(f'aqc {e}')
         retry = kwargs.get("retry", 0)
         retry += 1
         if retry >= 2:
@@ -632,7 +628,7 @@ async def aqc_detail(**kwargs):
         }
         return result
     except Exception as e:
-        print("aqc_detail", e)
+        logger.info(f"aqc_detail {e}")
         retry = kwargs.get("retry", 0)
         retry += 1
         if retry >= 2:
@@ -670,7 +666,7 @@ async def gsxt(**kwargs):
             result = await asyncio.gather(*tasks)
             return [x for x in result if x]
     except Exception as e:
-        print('gsxt', e)
+        logger.info(f'gsxt {e}')
         retry = kwargs.get("retry", 0)
         retry += 1
         if retry >= 2:
@@ -728,7 +724,7 @@ async def gsxt_detail(**kwargs):
             }
             return result
     except Exception as e:
-        print('gsxt_detail', e)
+        logger.info(f'gsxt_detail {e}')
         retry = kwargs.get("retry", 0)
         retry += 1
         if retry >= 2:
@@ -740,9 +736,9 @@ async def gsxt_detail(**kwargs):
 async def test():
     # proxy = await get_proxy()
     proxy = 'http://127.0.0.1:1080'
-    print(proxy)
+    logger.info(proxy)
     rs = await qcc(**{"key": "特变电工湖南工程有限公司", "proxy": proxy})
-    print(rs)
+    logger.info(rs)
     # tasks = [asyncio.create_task(qcc(**{"key": "特变电工湖南工程有限公司", "proxy": proxy})) for x in range(10)]
     # await asyncio.gather(*tasks)
 
@@ -780,6 +776,6 @@ if __name__ == '__main__':
     # rs = asyncio.get_event_loop().run_until_complete(gsxt_detail(**{"data": {"pripid": pripid}}))
     # rs = asyncio.get_event_loop().run_until_complete(get_proxy())
     # rs = asyncio.get_event_loop().run_until_complete(query_ip(**{"proxy": "http://182.111.108.203:45113"}))
-    print(rs)
+    logger.info(rs)
 
     # Tunnel connection failed: 401 Authorized failed
