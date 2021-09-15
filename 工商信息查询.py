@@ -24,7 +24,8 @@ from sys import platform
 from functools import lru_cache
 from loguru import logger
 
-logger.add(f'{os.path.basename(__file__)[:-3]}.log', rotation='0:00', enqueue=True, serialize=False, encoding="UTF-8", retention="7 days")
+logger.add(f'{os.path.basename(__file__)[:-3]}.log', rotation='200 MB', compression='zip', enqueue=True, serialize=False, encoding='utf-8', retention='7 days')
+
 
 host = socket.gethostbyname(socket.gethostname())
 
