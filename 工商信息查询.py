@@ -96,7 +96,7 @@ async def pub_req(**kwargs):
                     result = await rs.read()
                     return result
                 else:
-                    logger.info(f"pub_req {rs.text}")
+                    logger.info(f"pub_req {kwargs} {rs.status} {rs.text}")
                     time.sleep(randint(1, 2))
                     retry = kwargs.get("retry", 0)
                     retry += 1
@@ -105,7 +105,7 @@ async def pub_req(**kwargs):
                     kwargs["retry"] = retry
                     return await pub_req(**kwargs)
     except Exception as e:
-        logger.info(f"pub_req {e}")
+        logger.info(f"pub_req {kwargs} {e}")
         time.sleep(randint(1, 2))
         retry = kwargs.get("retry", 0)
         retry += 1
