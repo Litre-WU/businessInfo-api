@@ -14,6 +14,6 @@ tip:需设置代理(131行需自行设置)
 
 docker 运行  
   
- `docker build -t businessinfo . `  
+ `docker build -t businessinfo https://github.com/Litre-WU/businessInfo-api.git `  
    
  `docker run --name businessInfo -d -p 8081:8081 businessinfo`
