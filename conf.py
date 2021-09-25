@@ -19,7 +19,7 @@ bind = '0.0.0.0:8081'  # 绑定ip和端口号
 
 backlog = 512  # 监听队列
 
-timeout = 20  # 超时
+timeout = 10  # 超时
 
 # worker_class = 'gevent' # 默认的是sync模式
 # worker_class = 'uvicorn.workers.UvicornWorker'  # 使用uvicorn模式
