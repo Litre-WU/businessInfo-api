@@ -1,5 +1,5 @@
 # 基于镜像基础
-FROM python:3.9.6
+FROM python:3.9.7
 
 # 设置时区
 ENV TZ Asia/Shanghai
@@ -13,4 +13,4 @@ ADD . /app
 # 安装所需的包
 RUN pip install -r requirements.txt -i https://pypi.doubanio.com/simple/
 
-CMD ["gunicorn", "工商信息查询:app", "-c","gunicorn.py"]
+CMD ["gunicorn", "-c", "conf.py", "api:app"]
