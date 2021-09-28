@@ -26,8 +26,8 @@ from loguru import logger
 from boltons.cacheutils import LRI, LRU
 from hashlib import md5
 
-lri_cache = LRI()
-lru_cache = LRU()
+lri_cache = LRI(max_size=100)
+lru_cache = LRU(max_size=100)
 
 logger.add(f'{os.path.basename(__file__)[:-3]}.log', rotation='200 MB', compression='zip', enqueue=True, serialize=False, encoding='utf-8', retention='7 days')
 
