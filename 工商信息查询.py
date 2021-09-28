@@ -49,7 +49,13 @@ tags_metadata = [
     },
 ]
 
-app = FastAPI(openapi_url="/api/v1/api.json", title="企业工商信息查询接口", openapi_tags=tags_metadata)
+contact = {
+    "name": "Litre",
+    "url": "http://121.37.209.113",
+    "email": "litre-wu@tutanota.com",
+}
+
+app = FastAPI(openapi_url="/api/v1/api.json", title="企业工商信息查询接口", contact=contact, openapi_tags=tags_metadata)
 
 
 # 日志
@@ -61,7 +67,7 @@ async def log(request, **kwargs):
     
     
 # 首页
-@app.get("/")
+@app.get("/", tags=["首页"])
 async def index(request: Request, user_agent: Optional[str] = Header(None), x_token: List[str] = Header(None), ):
     result = {
         "code": 200,
@@ -83,7 +89,7 @@ class Qcc(BaseModel):
     creditCode: str = Field(..., example='统一社会信用代码(暂不使用)')
 
 
-@app.post("/", response_model=Qcc)
+@app.post("/", tags=["企业工商信息查询接口"])
 async def api(data: Qcc, request: Request, background_tasks: BackgroundTasks, x_token: List[str] = Header(None),
               user_agent: Optional[str] = Header(None)):
     kwargs = data.dict()
