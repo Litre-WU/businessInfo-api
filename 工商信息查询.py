@@ -23,6 +23,11 @@ import socket
 from sys import platform
 from functools import lru_cache
 from loguru import logger
+from boltons.cacheutils import LRI, LRU
+from hashlib import md5
+
+lri_cache = LRI()
+lru_cache = LRU()
 
 logger.add(f'{os.path.basename(__file__)[:-3]}.log', rotation='200 MB', compression='zip', enqueue=True, serialize=False, encoding='utf-8', retention='7 days')
 
@@ -74,7 +79,10 @@ class Qcc(BaseModel):
 async def api(data: Qcc, request: Request, background_tasks: BackgroundTasks, x_token: List[str] = Header(None),
               user_agent: Optional[str] = Header(None)):
     kwargs = data.dict()
+    key = md5(str(kwargs).encode()).hexdigest()
+    if lru_cache.get(key): return lru_cache[key]
     result = await query(**kwargs)
+    if result: lru_cache[key] = result
     return JSONResponse(result)
 
 
