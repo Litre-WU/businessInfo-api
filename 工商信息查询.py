@@ -52,6 +52,14 @@ tags_metadata = [
 app = FastAPI(openapi_url="/api/v1/api.json", title="企业工商信息查询接口", openapi_tags=tags_metadata)
 
 
+# 日志
+async def log(request, **kwargs):
+    ritems = dict(request.items())
+    if not kwargs: kwargs = ""
+    log_info = f'{ritems["client"][0]} {ritems["method"]} {ritems["path"]} {ritems["type"]}/{ritems["http_version"]} {kwargs}'
+    logger.info(log_info)
+    
+    
 # 首页
 @app.get("/")
 async def index(request: Request, user_agent: Optional[str] = Header(None), x_token: List[str] = Header(None), ):
@@ -79,6 +87,7 @@ class Qcc(BaseModel):
 async def api(data: Qcc, request: Request, background_tasks: BackgroundTasks, x_token: List[str] = Header(None),
               user_agent: Optional[str] = Header(None)):
     kwargs = data.dict()
+    await log(request, **kwargs)
     key = md5(str(kwargs).encode()).hexdigest()
     if lru_cache.get(key): return lru_cache[key]
     result = await query(**kwargs)
