@@ -227,16 +227,18 @@ async def query(**kwargs):
     else:
         retry = kwargs.get("retry", 0)
         retry += 1
-        # 第一次代理
-        proxy = await get_proxy()
-        if proxy:
-            kwargs = kwargs | {"proxy": f'http://{proxy[0]["ip"]}:{proxy[0]["port"]}'}
-        else:
-            kwargs = kwargs | {"proxy": ""}
-            return await query(**kwargs)
+        kwargs["retry"] = retry
+        if retry == 1:
+            # 第一次代理
+            proxy = await get_proxy()
+            if proxy:
+                kwargs = kwargs | {"proxy": f'http://{proxy[0]["ip"]}:{proxy[0]["port"]}'}
+                return await query(**kwargs)
+            else:
+                kwargs = kwargs | {"proxy": ""}
+                return await query(**kwargs)
         if retry > 2:
             return {"code": 200, "msg": "Fail", "result": None}
-        kwargs["retry"] = retry
         # 第二次更换代理
         proxy = await get_proxy(**{"turn": 1})
         if proxy:
