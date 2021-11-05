@@ -439,7 +439,7 @@ async def qcc_detail(**kwargs):
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
         result = await pub_req(**meta)
-        if not result: return None
+        if not result: return data
         tables = pd.read_html(result.decode())
         # logger.info(tables)
         info_list = []
