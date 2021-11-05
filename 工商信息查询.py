@@ -708,47 +708,61 @@ async def gsxt_detail(**kwargs):
         meta = {
             "url": f'https://app.gsxt.gov.cn/gsxt/corp-query-entprise-info-primaryinfoapp-entbaseInfo-{data["pripid"]}.html',
             "params": {"nodeNum": "310000", "entType": "6150", "sourceType": "W"},
-            "headers": {"X-Requested-With": "XMLHttpRequest"},
+            "headers": {"Referer": "https://servicewechat.com", "content-type": "application/x-www-form-urlencoded",
+                        "Accept-Encoding": "gzip, deflate, br"},
             "proxy": kwargs.get("proxy", ""),
             "proxy_user": kwargs.get("proxy_user", ""),
             "proxy_pass": kwargs.get("proxy_pass", ""),
         }
-        result = await pub_req(**meta)
-        if not result: return None
-        result = json.loads(result.decode())
-        if result.get("result"):
+        res = await pub_req(**meta)
+        result = {
+            "name_cn": data.get("entName", "").replace("<font color=red>", "").replace("</font>", ""),
+            "status": data.get("corpStatusString", ""),
+            "regist_code": data.get("regNo", ""),
+            "social_credit_code": data.get("uniscId", ""),
+            "legal_person": data.get("legelRep", ""),
+            "type": data.get("entTypeString", ""),
+            "found_date": data.get("estDate", ""),
+            "regist_office": data.get("regOrg", ""),
+            "transformer_name": data.get("historyName", "").replace("<font color=red>", "").replace("</font>", ""),
+        }
+        if not res:
+            return result
+        res = json.loads(res.decode())
+        if res.get("result"):
             result = {
-                "name_cn": result["result"]["entName"],
+                "name_cn": res["result"]["entName"],
                 "name_en": "",
-                "legal_person": result["result"]["name"],
-                "registered_capital": f'{result["regCaption"]}{result["regCapCurCN"]}'.strip(),
+                "legal_person": res["result"]["name"],
+                "registered_capital": f'{res["regCaption"]}{res["regCapCurCN"]}'.strip(),
                 "really_capital": "",
-                "found_date": result["result"]["estDate"],
-                "issue_date": result["result"]["apprDate"],
-                "social_credit_code": result["result"]["uniscId"],
+                "found_date": res["result"]["estDate"],
+                "issue_date": res["result"]["apprDate"],
+                "social_credit_code": res["result"]["uniscId"],
                 "organization_code": "",
-                "regist_code": result["result"]["regNo"],
+                "regist_code": res["result"]["regNo"],
                 "taxpayer_code": "",
                 "imp_exp_enterprise_code": "",
-                "industry_involved": result["result"]["industryPhy"],
-                "type": result["result"]["entType_CN"],
-                "license_start_date": result["result"]["opFrom"],
-                "license_end_date": result["result"]["opTo"],
-                "regist_office": result["result"]["regOrg_CN"],
+                "industry_involved": res["result"]["industryPhy"],
+                "type": res["result"]["entType_CN"],
+                "license_start_date": res["result"]["opFrom"],
+                "license_end_date": res["result"]["opTo"],
+                "regist_office": res["result"]["regOrg_CN"],
                 "staff_size": "",
                 "insured_size": "",
-                "province": result["nodeNum"],
-                "address": result["result"]["dom"],
-                "business_scope": result["result"]["opScope"],
+                "province": res["nodeNum"],
+                "address": res["result"]["dom"],
+                "business_scope": res["result"]["opScope"],
                 "email": "",
                 "unit_phone": "",
                 "fax": "",
                 "website": "",
-                "regist_address": result["result"]["dom"],
-                "transformer_name": "",
-                "status": result["result"]["regState_CN"],
+                "regist_address": res["result"]["dom"],
+                "transformer_name": data.get("historyName", ""),
+                "status": res["result"]["regState_CN"],
             }
-            return result
+        return result
+
     except Exception as e:
         logger.info(f'gsxt_detail {e}')
         retry = kwargs.get("retry", 0)
