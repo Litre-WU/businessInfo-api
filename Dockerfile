@@ -1,5 +1,5 @@
 # 基于镜像基础
-FROM python:3.9.7
+FROM python:3.10.1
 
 # 设置时区
 ENV TZ Asia/Shanghai
