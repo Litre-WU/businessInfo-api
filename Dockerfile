@@ -13,4 +13,4 @@ ADD . /app
 # 安装所需的包
 RUN pip install -r requirements.txt -i https://pypi.doubanio.com/simple/
 
-CMD ["gunicorn", "-c", "conf.py", "api:app"]
+CMD ["gunicorn", "-c", "conf.py", "看准-企业工商信息查询:app"]
