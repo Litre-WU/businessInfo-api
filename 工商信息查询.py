@@ -104,7 +104,24 @@ async def api(data: Qcc, request: Request, background_tasks: BackgroundTasks, x_
 # 公共请求函数
 async def pub_req(**kwargs):
     if not kwargs.get("url", ""): return None
-    headers = {"User-Agent": generate_user_agent()} | kwargs.get("headers", {})
+    headers ={**{
+        "X-Forwarded-For": ip,
+        "X-Forwarded": ip,
+        "Forwarded-For": ip,
+        "Forwarded": ip,
+        "X-Forwarded-Proto": ip,
+        "X-Forwarded-Host": ip,
+        "X-Requested-With": ip,
+        "X-Client-IP": ip,
+        "X-remote-IP": ip,
+        "X-remote-addr": ip,
+        "X-Real-IP": ip,
+        "True-Client-IP": ip,
+        "Client-IP": ip,
+        "X_FORWARDED_FOR": ip,
+        "X_REAL_IP": ip,
+        "User-Agent": generate_user_agent()
+    }, **kwargs.get("headers", {})}
     try:
         # aiohttp
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10),
